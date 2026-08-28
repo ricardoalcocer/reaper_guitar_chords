@@ -18,6 +18,7 @@ test: all
 	@lua5.4 tests/test_riffs.lua
 	@lua5.4 tests/test_song.lua
 	@lua5.4 tests/test_inversions.lua
+	@lua5.4 tests/test_metronome.lua
 	@lua5.4 tests/dump_analysis.lua >/dev/null && node tests/test_parity.js
 
 packs:
