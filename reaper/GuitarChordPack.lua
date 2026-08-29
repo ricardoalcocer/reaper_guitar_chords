@@ -3,10 +3,10 @@
   @description Browse guitar-voiced chords, audition them through the selected
                track's instrument, and insert them as MIDI at the edit cursor.
   @author generated for REAPER, no extensions required
-  @version 2.5.0+3f0c748
+  @version 2.5.0+762a868
 --]]
 
-local VERSION = "2.5.0+3f0c748"
+local VERSION = "2.5.0+762a868"
 
 ----------------------------------------------------------------------
 -- data
@@ -1259,6 +1259,9 @@ local W, H = 720, 812             -- design canvas: fixed width, fixed *minimum*
 -- the footer anchors to the true bottom. Width still governs the scale, so nothing reflows
 -- horizontally. drawHc is the current canvas height, recomputed each frame from the window.
 local drawHc = H
+-- ...but the fretboard only takes a slice of that extra height so it stays a landscape
+-- rectangle instead of ballooning; any slack past this becomes open space above the footer.
+local BOARD_MAX_EXTRA = 70
 -- STABLE title (no version): REAPER remembers a gfx window's position by its title, so
 -- the version lives in the status bar instead — otherwise every build looks like a new
 -- window and its remembered position is lost. We set the size (for zoom); REAPER the spot.
@@ -1353,6 +1356,7 @@ afterInit()
 local function draw(dh)
   dh = dh or H
   local grow = dh - H          -- extra height to absorb (0 unless the window is tall)
+  local bgrow = math.min(grow, BOARD_MAX_EXTRA)   -- capped share the board/timeline take
   gfx.setfont(1)
   col(C.bg); gfx.rect(0,0,W,dh,1)
 
@@ -1448,11 +1452,12 @@ local function draw(dh)
     txt(a.note, kx, 116, C.mute, 2)
   end
 
-  -- the board (or the song timeline) soaks up the extra height so the window fills
-  if S.tab==5 then drawTimeline() else drawBoard(f, 20, 138, 680, 100 + grow) end
+  -- the board (or the song timeline) takes a capped slice of the extra height; the rest
+  -- stays open above the footer, so the fretboard keeps a rectangular shape
+  if S.tab==5 then drawTimeline() else drawBoard(f, 20, 138, 680, 100 + bgrow) end
 
   -- transport (tab-aware: the Song tab commits the whole arrangement)
-  local y = 268 + grow
+  local y = 268 + bgrow
   if button(20, y, 96, 30, playing and 'Stop' or 'Audition', not playing) then
     if playing then stopAudition() else audition() end
   end
@@ -1474,7 +1479,7 @@ local function draw(dh)
   end
 
   -- selectors
-  y = 316 + grow
+  y = 316 + bgrow
   if S.tab == 1 then
     -- key-first: pick the key, then quality, and the diatonic chords fall out of it
     txt('KEY', 20, y, C.mute, 2)
@@ -1713,7 +1718,7 @@ local function loop()
   local s  = math.min(ww / W, wh / H)
   local Hc = math.max(H, math.floor(wh / s + 0.5))
   if Hc ~= drawHc then drawHc = Hc; gfx.setimgdim(CANVAS, W, Hc) end
-  LANE.h = 84 + (Hc - H)                        -- the song lane grows with the canvas
+  LANE.h = 84 + math.min(Hc - H, BOARD_MAX_EXTRA)   -- the song lane grows, same cap
   local dw, dh = W * s, Hc * s
   local ox, oy = (ww - dw) / 2, (wh - dh) / 2
   mx = (gfx.mouse_x - ox) / s
