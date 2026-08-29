@@ -883,7 +883,11 @@ local function drawInKeyStrip(y)
     local sel = (rootPC==dc.pc) and (S.tab~=1 or S.qual==dc.quality)
     if chip(x, y+18, 84, 26, dc.numeral, sel, 2) then playDegree(i) end
     txt(DEG_KEYS[i], x+5, y+21, sel and C.selink or C.mute, 2)  -- keyboard hint
-    txtc(dc.root .. (dc.quality=='maj' and '' or dc.quality), x, y+46, 84, C.mute, 2)
+    -- the chord name under each numeral only means something on Chords; a power chord
+    -- is always a 5th and a riff is a single line, so the quality there would mislead
+    if S.tab==1 then
+      txtc(dc.root .. (dc.quality=='maj' and '' or dc.quality), x, y+46, 84, C.mute, 2)
+    end
   end
 end
 
