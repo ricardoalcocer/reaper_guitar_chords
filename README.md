@@ -7,7 +7,7 @@
 Every chord is a real fretboard shape, not a stacked triad. A `D` is `xx0232` — four notes with the bass strings muted — so it sounds like a guitar, not a MIDI keyboard.
 
 [![license](https://img.shields.io/badge/license-MIT-3b82f6)](LICENSE)
-![version](https://img.shields.io/badge/version-2.2.0-f59e0b)
+![version](https://img.shields.io/badge/version-2.3.0-f59e0b)
 ![REAPER](https://img.shields.io/badge/REAPER-ReaScript-2a9d8f)
 ![browser](https://img.shields.io/badge/browser-standalone_HTML-2a9d8f)
 ![runtime deps](https://img.shields.io/badge/runtime_deps-none-22c55e)
