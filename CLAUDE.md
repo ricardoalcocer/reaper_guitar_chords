@@ -27,6 +27,25 @@ Both JSON files are embedded into both build outputs.
 in `src/` and run `make`. Both files are committed anyway so users can download one file
 and run it.
 
+## A change is not done until it is on `main`
+
+The user loads the REAPER script **directly from `reaper/GuitarChordPack.lua` in this
+checkout** (a ReaScript action pointing at the repo file), and the browser tool from
+`web/guitar-audition.html`. So a change is invisible to them until the rebuilt output is
+committed **on the branch they load — `main`**. Passing `make test` is not "done": work
+left on a side branch, or in a `.claude/worktrees/` worktree, does not exist as far as
+REAPER is concerned.
+
+- If you build in a worktree, **fast-forward `main` onto it before calling the task
+  done**: `git merge --ff-only <branch>`. Never leave a finished feature stranded off
+  `main`. (A worktree session is sandboxed to its own tree and cannot advance `main`
+  itself — exit the worktree first, or hand the user the one-line command.)
+- After the file on disk changes, **REAPER must reload it**: close the script window and
+  re-run the action. A running instance keeps the old code in memory (the UI is a
+  `reaper.defer` loop), so edits do not appear until a fresh launch.
+- Confirm the stamped `@version` in `reaper/GuitarChordPack.lua` matches what you built —
+  a stale version on `main` is the tell that the build never landed there.
+
 ## Always run `make test`
 
 Five suites, all fast:
