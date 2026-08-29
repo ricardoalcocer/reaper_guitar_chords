@@ -685,13 +685,19 @@ end
 
 -- play the i-th diatonic chord of the current key by keyboard, so you can accompany
 -- yourself by ear — press a key, sing over it, press the next. It selects the same
--- chord the "IN KEY" numeral row shows and auditions it with the current strum,
--- switching to the Chords tab so the board confirms what's sounding.
+-- chord the "IN KEY" numeral row shows and auditions it with the current strum.
+-- Each tab has its own idea of "root": the Power tab's power-chord root, the Riff
+-- tab's pedal root, otherwise the Chords tab's chord (and its quality). We stay on the
+-- current tab, so you can comp power and riff parts by scale degree too — and jump to
+-- Chords from anywhere else so the board confirms what's sounding.
 local function playDegree(i)
   local dia = diatonicChords(S.keyPC, S.keyMode, S.sevenths)
   local dc = dia[i]
   if not dc then return end
-  S.tab, S.root, S.qual, S.inv = 1, NAMES[dc.pc+1], dc.quality, 0
+  local name = NAMES[dc.pc+1]
+  if S.tab==2 then S.proot = name
+  elseif S.tab==4 then S.rroot = name
+  else S.tab, S.root, S.qual, S.inv = 1, name, dc.quality, 0 end
   audition()
 end
 
@@ -855,6 +861,30 @@ local function button(x,y,w,h,label,primary)
   box(x,y,w,h, primary and C.accent or (hov and C.mute or C.line), false)
   txtc(label, x, y + (h-12)/2 - 2, w, primary and C.selink or C.ink, 2)
   return clicked and hov
+end
+
+-- the "IN KEY" numeral strip: the seven diatonic chords of the current key, each
+-- playable by click or by the home-row key beneath it (a s d f g h j = I..vii°).
+-- Shared by the Chords, Power and Riff tabs, so the strip and its keys mean the same
+-- thing everywhere — both route through playDegree(), which knows what "root" each tab
+-- sets. The lit numeral tracks whichever root the current tab is using.
+local function drawInKeyStrip(y)
+  txt('IN KEY', 20, y, C.mute, 2)
+  txt('press the home row  a s d f g h j  to play and sing along', 78, y, {0.36,0.37,0.40}, 2)
+  if chip(640, y+18, 60, 26, S.sevenths and '7ths' or 'triads', S.sevenths, 2) then
+    S.sevenths = not S.sevenths
+  end
+  local rootPC = (S.tab==2 and pcOf(S.proot))
+              or (S.tab==4 and pcOf(S.rroot))
+              or pcOf(S.root)
+  for i,dc in ipairs(diatonicChords(S.keyPC, S.keyMode, S.sevenths)) do
+    local x = 20 + (i-1)*88
+    -- on Chords the quality must match too; Power and Riff take only the root
+    local sel = (rootPC==dc.pc) and (S.tab~=1 or S.qual==dc.quality)
+    if chip(x, y+18, 84, 26, dc.numeral, sel, 2) then playDegree(i) end
+    txt(DEG_KEYS[i], x+5, y+21, sel and C.selink or C.mute, 2)  -- keyboard hint
+    txtc(dc.root .. (dc.quality=='maj' and '' or dc.quality), x, y+46, 84, C.mute, 2)
+  end
 end
 
 ----------------------------------------------------------------------
@@ -1279,20 +1309,7 @@ local function draw()
 
     -- the seven chords of the chosen key, one click each — or play them from the home
     -- row (a s d f g h j = I..vii°) and sing along; each chip shows its key in the corner.
-    txt('IN KEY', 20, y+136, C.mute, 2)
-    txt('press the home row  a s d f g h j  to play and sing along', 78, y+136, {0.36,0.37,0.40}, 2)
-    if chip(640, y+154, 60, 26, S.sevenths and '7ths' or 'triads', S.sevenths, 2) then
-      S.sevenths = not S.sevenths
-    end
-    for i,dc in ipairs(diatonicChords(S.keyPC, S.keyMode, S.sevenths)) do
-      local x = 20 + (i-1)*88
-      local sel = (pcOf(S.root)==dc.pc and S.qual==dc.quality)
-      if chip(x, y+154, 84, 26, dc.numeral, sel, 2) then
-        S.root = NAMES[dc.pc+1]; S.qual = dc.quality; S.inv=0; audition()
-      end
-      txt(DEG_KEYS[i], x+5, y+157, sel and C.selink or C.mute, 2)  -- keyboard hint
-      txtc(dc.root .. (dc.quality=='maj' and '' or dc.quality), x, y+182, 84, C.mute, 2)
-    end
+    drawInKeyStrip(y+136)
 
     txt('CHORD ROOT', 20, y+210, C.mute, 2)
     for i,r in ipairs(ROOTS) do
@@ -1347,6 +1364,8 @@ local function draw()
       local yy = y + 166 + math.floor((i-1)/5)*32
       if patternChip(x, yy, 132, 30, i==S.powerIdx, p.name, p) then S.powerIdx=i; audition() end
     end
+    -- same home-row strip as Chords: a s d f g h j set the power-chord root by degree
+    drawInKeyStrip(y+280)
   elseif S.tab==4 then
     txt('ROOT', 20, y, C.mute, 2)
     for i,r in ipairs(ROOTS) do
@@ -1374,6 +1393,16 @@ local function draw()
       if clicked and hov then S.riffSeed = S.riffSeed + 1; audition() end
     end
     txt('a new procedural line in the same scale + rhythm', 176, y+253, C.mute, 2)
+    -- the Riff tab has no key of its own, so give it one here: the home-row strip then
+    -- drives the pedal root by scale degree, just like Chords and Power.
+    txt('KEY', 20, y+294, C.mute, 2)
+    for i,r in ipairs(ROOTS) do
+      local x = 20 + (i-1)*46
+      if chip(x, y+312, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
+    end
+    if chip(578, y+312, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
+    if chip(640, y+312, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
+    drawInKeyStrip(y+348)
   elseif S.tab==5 then
     -- song inspector: the selected block's controls, plus arranging help
     txt('SONG', 20, y, C.mute, 2)
