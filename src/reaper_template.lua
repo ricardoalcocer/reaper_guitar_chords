@@ -1080,7 +1080,12 @@ local function drawTimeline()
   end
 end
 
-local W, H = 720, 812             -- fixed design canvas; the UI never reflows off it
+local W, H = 720, 812             -- design canvas: fixed width, fixed *minimum* height
+-- The canvas grows taller than H to fill a tall (docked) window instead of letterboxing:
+-- the extra height goes into the fretboard/timeline, everything below it shifts down, and
+-- the footer anchors to the true bottom. Width still governs the scale, so nothing reflows
+-- horizontally. drawHc is the current canvas height, recomputed each frame from the window.
+local drawHc = H
 -- STABLE title (no version): REAPER remembers a gfx window's position by its title, so
 -- the version lives in the status bar instead — otherwise every build looks like a new
 -- window and its remembered position is lost. We set the size (for zoom); REAPER the spot.
@@ -1172,9 +1177,11 @@ do
 end
 afterInit()
 
-local function draw()
+local function draw(dh)
+  dh = dh or H
+  local grow = dh - H          -- extra height to absorb (0 unless the window is tall)
   gfx.setfont(1)
-  col(C.bg); gfx.rect(0,0,W,H,1)
+  col(C.bg); gfx.rect(0,0,W,dh,1)
 
   -- tabs
   local tabs = {'Chords','Power','Progressions','Riffs'}
@@ -1268,10 +1275,11 @@ local function draw()
     txt(a.note, kx, 116, C.mute, 2)
   end
 
-  if S.tab==5 then drawTimeline() else drawBoard(f, 20, 138, 680, 100) end
+  -- the board (or the song timeline) soaks up the extra height so the window fills
+  if S.tab==5 then drawTimeline() else drawBoard(f, 20, 138, 680, 100 + grow) end
 
   -- transport (tab-aware: the Song tab commits the whole arrangement)
-  local y = 268
+  local y = 268 + grow
   if button(20, y, 96, 30, playing and 'Stop' or 'Audition', not playing) then
     if playing then stopAudition() else audition() end
   end
@@ -1293,7 +1301,7 @@ local function draw()
   end
 
   -- selectors
-  y = 316
+  y = 316 + grow
   if S.tab == 1 then
     -- key-first: pick the key, then quality, and the diatonic chords fall out of it
     txt('KEY', 20, y, C.mute, 2)
@@ -1493,7 +1501,7 @@ local function draw()
   -- pattern grid (hidden where another row occupies its space: progressions and song)
   local art = currentArt()
   if art.p and S.tab ~= 3 and S.tab ~= 5 then
-    local gy = H - 96
+    local gy = dh - 96
     local n = #art.p
     local cw = (680 - (n-1)*3) / n
     for i=1,n do
@@ -1508,14 +1516,14 @@ local function draw()
     end
   end
 
-  box(0, H-52, W, 52, C.panel, true)
-  txt(S.status, 20, H-36, C.mute, 2)
+  box(0, dh-52, W, 52, C.panel, true)
+  txt(S.status, 20, dh-36, C.mute, 2)
   -- version tag, so this window is identifiable at a glance against the browser build
   do
     gfx.setfont(2); col(C.mute)
     local vs = 'v'..VERSION
     local vw = gfx.measurestr(vs)
-    gfx.x = W - vw - 20; gfx.y = H-36; gfx.drawstr(vs)
+    gfx.x = W - vw - 20; gfx.y = dh-36; gfx.drawstr(vs)
   end
 end
 
@@ -1527,8 +1535,13 @@ local function loop()
     local _, wx, wy = gfx.dock(-1, 0, 0, 0, 0)    -- reliable window position on macOS
     if wx then winX, winY = wx, wy end
   end
+  -- width governs the scale (never overflow); then grow the canvas *height* to exactly
+  -- fill the window at that scale, so a tall docked window has no letterbox bars
   local s  = math.min(ww / W, wh / H)
-  local dw, dh = W * s, H * s
+  local Hc = math.max(H, math.floor(wh / s + 0.5))
+  if Hc ~= drawHc then drawHc = Hc; gfx.setimgdim(CANVAS, W, Hc) end
+  LANE.h = 84 + (Hc - H)                        -- the song lane grows with the canvas
+  local dw, dh = W * s, Hc * s
   local ox, oy = (ww - dw) / 2, (wh - dh) / 2
   mx = (gfx.mouse_x - ox) / s
   my = (gfx.mouse_y - oy) / s
@@ -1550,10 +1563,10 @@ local function loop()
   end
 
   gfx.dest = CANVAS                            -- render the UI to the offscreen canvas
-  draw()
+  draw(Hc)
   gfx.dest = -1                                -- then blit it, scaled, into the window
   col(C.bg); gfx.rect(0, 0, ww, wh, 1)         -- letterbox fill around the canvas
-  gfx.blit(CANVAS, 1, 0, 0, 0, W, H, ox, oy, dw, dh)
+  gfx.blit(CANVAS, 1, 0, 0, 0, W, Hc, ox, oy, dw, dh)
 
   mousePrev = gfx.mouse_cap
   serviceAudio()
