@@ -14,7 +14,7 @@ Every chord is a real fretboard shape, not a stacked triad. A `D` is `xx0232` �
 ![voicings](https://img.shields.io/badge/voicings-336-64b5f6)
 ![progressions](https://img.shields.io/badge/progressions-231-64b5f6)
 
-<img src="docs/images/screenshot-chords.png" alt="Guitar Chord Pack — browsing an Am7 voicing with its roman-numeral analysis and the diatonic chords of C major" width="820">
+<img src="docs/images/screenshot-chords.png?v=2" alt="Guitar Chord Pack — browsing an Am7 voicing with its roman-numeral analysis and the diatonic chords of C major" width="820">
 
 </div>
 
@@ -93,7 +93,7 @@ Every chord, six strum patterns, and power chords in thirteen riff patterns — 
 Pick a style, click a progression, and audition or insert it in any key. Metal archetypes voice as power chords automatically.
 
 <div align="center">
-<img src="docs/images/screenshot-progressions.png" alt="The progression library, filtered by style, auditioning a Mixolydian I–♭VII–IV in C major" width="820">
+<img src="docs/images/screenshot-progressions.png?v=2" alt="The progression library, filtered by style, auditioning a Mixolydian I–♭VII–IV in C major" width="820">
 </div>
 
 ## What's in the box
