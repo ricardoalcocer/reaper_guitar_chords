@@ -387,8 +387,6 @@ local S = {
   loop     = true,
   keyPC    = 0,            -- C
   keyMode  = 'maj',
-  tsNum    = 4,            -- metronome/project time signature; synced from the project
-  tsDen    = 4,            --   at startup, and written back when the control changes it
   sevenths = false,
   mood     = PROGS.moods[1],   -- selected progression category
   progSel  = 1,                -- index into the filtered progression list
@@ -434,23 +432,6 @@ local function barQN()
   return num * (4/den)
 end
 local function tempo() return reaper.Master_GetTempo() end
-
--- metronome time-signature presets, cycled by the transport-row control. Whatever is
--- picked also becomes the project time signature, so the click, the bar grid and chord
--- insertion all share one meter (barQN already reads the project). Ordered by how often
--- each turns up when writing.
-local TIME_SIGS = { {4,4}, {3,4}, {6,8}, {2,4}, {5,4}, {7,8}, {12,8} }
--- the signature after (num,den); wraps at the end, and falls back to the first when the
--- current one isn't a preset (e.g. an odd meter set in REAPER by hand)
-local function nextTimeSig(num, den)
-  for i,ts in ipairs(TIME_SIGS) do
-    if ts[1]==num and ts[2]==den then
-      local nx = TIME_SIGS[i % #TIME_SIGS + 1]
-      return nx[1], nx[2]
-    end
-  end
-  return TIME_SIGS[1][1], TIME_SIGS[1][2]
-end
 
 -- the chord voicing for the Chords tab, with the selected inversion applied
 -- (falls back to root position if that inversion has no playable shape)
@@ -599,8 +580,6 @@ end
 ----------------------------------------------------------------------
 local sched, playing, nextStart, lit = {}, false, 0, {}
 local playBarStarts = {}          -- audio-clock start time of each bar in the queued sequence
-local metroOn = false             -- is REAPER's metronome running under our control
-local metroPrevEnabled = false    -- was the metronome already enabled before we turned it on
 
 local function panic()
   for ch=0,0 do reaper.StuffMIDIMessage(0, 0xB0+ch, 123, 0) end
@@ -692,78 +671,6 @@ end
 local function stopAudition()
   playing = false
   panic()
-end
-
-----------------------------------------------------------------------
--- metronome: REAPER's own click, driven from here. We use the native metronome (not the
--- StuffMIDIMessage audition path) on purpose: the audition is serviced from the ~30fps
--- UI loop, so its timing wanders a few ms — fine for chords, wrong for a click you play
--- against. REAPER's metronome runs in the audio engine, sample-accurate, the same
--- tightness as a drum track. Beat 1 is accented automatically from the time signature;
--- REAPER exposes no scriptable per-beat accent pattern without SWS, and this tool ships
--- with no dependencies, so the downbeat accent is the accent we give.
-----------------------------------------------------------------------
-local METRO_CMD = 40364    -- Options: Metronome enabled (toggle)
-
--- write S.tsNum/S.tsDen as the project time signature at bar 1, reusing the tempo/
--- time-sig marker already at time 0 so repeated changes don't pile up duplicates.
--- Tempo is passed through unchanged.
-local function applyTimeSig()
-  local idx0 = -1
-  for i = 0, reaper.CountTempoTimeSigMarkers(0) - 1 do
-    local ok, tpos = reaper.GetTempoTimeSigMarker(0, i)
-    if ok and tpos == 0 then idx0 = i; break end
-  end
-  reaper.SetTempoTimeSigMarker(0, idx0, 0, -1, -1, tempo(), S.tsNum, S.tsDen, false)
-  reaper.UpdateTimeline()
-end
-
-local function metroStart()
-  -- only touch the project (and the undo history) if its meter isn't already ours, so
-  -- toggling the metronome on and off doesn't pile up "Set time signature" undo points
-  local pnum, pden = reaper.TimeMap_GetTimeSigAtTime(0, 0)
-  if pnum ~= S.tsNum or pden ~= S.tsDen then
-    reaper.Undo_BeginBlock()
-    applyTimeSig()
-    reaper.Undo_EndBlock('Set time signature ' .. S.tsNum .. '/' .. S.tsDen, -1)
-  end
-  metroPrevEnabled = reaper.GetToggleCommandState(METRO_CMD) == 1
-  if not metroPrevEnabled then reaper.Main_OnCommand(METRO_CMD, 0) end
-  reaper.OnPlayButton()
-  metroOn = true
-  S.status = string.format(
-    'Metronome on · %d/%d · %.0f BPM · beat 1 accented. Press it again to stop.',
-    S.tsNum, S.tsDen, tempo())
-end
-
-local function metroStop()
-  reaper.OnStopButton()
-  -- leave the metronome enable exactly as we found it
-  if not metroPrevEnabled and reaper.GetToggleCommandState(METRO_CMD) == 1 then
-    reaper.Main_OnCommand(METRO_CMD, 0)
-  end
-  metroOn = false
-  S.status = 'Metronome off.'
-end
-
--- when the transport is stopped from REAPER itself, drop our state so the toggle stays
--- truthful and the metronome-enable setting is restored
-local function syncMetro()
-  if metroOn and (reaper.GetPlayState() & 1) == 0 then
-    if not metroPrevEnabled and reaper.GetToggleCommandState(METRO_CMD) == 1 then
-      reaper.Main_OnCommand(METRO_CMD, 0)
-    end
-    metroOn = false
-  end
-end
-
-local function cycleTimeSig()
-  S.tsNum, S.tsDen = nextTimeSig(S.tsNum, S.tsDen)
-  reaper.Undo_BeginBlock()
-  applyTimeSig()
-  reaper.Undo_EndBlock('Set time signature ' .. S.tsNum .. '/' .. S.tsDen, -1)
-  S.status = 'Time signature ' .. S.tsNum .. '/' .. S.tsDen ..
-             (metroOn and ' · metronome following.' or '.')
 end
 
 -- the home-row keys, left to right, standing in for scale degrees I..vii°. A physical
@@ -1223,13 +1130,6 @@ local function loadState()
 end
 loadState()
 
--- take the metronome's time signature from the project so the control matches whatever
--- the session already opened with (the meter lives in the project, not in ExtState)
-do
-  local num, den = reaper.TimeMap_GetTimeSigAtTime(0, 0)
-  if num and num > 0 then S.tsNum, S.tsDen = math.floor(num), math.floor(den) end
-end
-
 -- open at the remembered zoom size, and the remembered position if we have one
 do
   local w0, h0 = levelSize(uiIdx)
@@ -1347,26 +1247,15 @@ local function draw()
     if button(378, y, 96, 30, 'Clear song') then
       S.song, S.songSel = {}, nil; stopAudition(); S.status = 'Song cleared.'
     end
+    if chip(480, y, 54, 30, 'loop', S.loop, 2) then S.loop = not S.loop end
+    txt(string.format('%.0f BPM', tempo()), 544, y+9, C.mute, 2)
   else
     if button(122, y, 116, 30, 'Insert at cursor') then insertAtCursor() end
     if button(244, y, 84, 30, 'Save .mid') then exportMidi() end
     if button(334, y, 104, 30, 'Set up track') then setupTrack() end
     if SONG_ENABLED and button(444, y, 124, 30, '+ Add to Song', true) then addToSong(tabKind()) end
-  end
-
-  -- shared right cluster: metronome + time signature + loop + tempo. Drawn once, tab-
-  -- independent, so it reads the same everywhere and sits to the right of that tab's
-  -- own transport buttons. The metronome is REAPER's own click (see metroStart); the
-  -- time-sig chip cycles the preset list and sets the project meter with it.
-  do
-    if button(452, y, 84, 30, 'Metronome', metroOn) then
-      if metroOn then metroStop() else metroStart() end
-    end
-    if chip(544, y, 50, 30, S.tsNum..'/'..S.tsDen, false, 2) then cycleTimeSig() end
-    if chip(602, y, 44, 30, 'loop', S.loop, 2) then S.loop = not S.loop end
-    local bpms = string.format('%.0f BPM', tempo())
-    gfx.setfont(2); local bw = gfx.measurestr(bpms)
-    txt(bpms, 700 - bw, y+9, C.mute, 2)
+    if chip(574, y, 54, 30, 'loop', S.loop, 2) then S.loop = not S.loop end
+    txt(string.format('%.0f BPM', tempo()), 634, y+9, C.mute, 2)
   end
 
   -- selectors
@@ -1642,7 +1531,6 @@ local function loop()
 
   mousePrev = gfx.mouse_cap
   serviceAudio()
-  syncMetro()               -- notice if the transport was stopped from REAPER itself
 
   local ch = gfx.getchar()
   if ch == 32 then if playing then stopAudition() else audition() end end
@@ -1650,9 +1538,7 @@ local function loop()
   -- the home row a s d f g h j (any case) plays the seven diatonic chords of the key,
   -- left to right = I..vii°, so you can sing and comp yourself with fingers at rest
   if DEGREE_KEY[ch] then playDegree(DEGREE_KEY[ch]) end
-  if ch == 27 or ch == -1 then
-    stopAudition(); if metroOn then metroStop() end; saveState(); gfx.quit(); return
-  end
+  if ch == 27 or ch == -1 then stopAudition(); saveState(); gfx.quit() return end
   gfx.update()
 
   -- apply a zoom change by re-opening the window at the new size (gfx ignores a
@@ -1667,5 +1553,5 @@ local function loop()
   reaper.defer(loop)
 end
 
-reaper.atexit(function() panic(); if metroOn then metroStop() end; saveState() end)
+reaper.atexit(function() panic(); saveState() end)
 loop()
