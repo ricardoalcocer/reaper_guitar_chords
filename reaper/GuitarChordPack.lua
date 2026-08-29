@@ -3,10 +3,10 @@
   @description Browse guitar-voiced chords, audition them through the selected
                track's instrument, and insert them as MIDI at the edit cursor.
   @author generated for REAPER, no extensions required
-  @version 2.5.0+762a868
+  @version 2.5.0+d737215
 --]]
 
-local VERSION = "2.5.0+762a868"
+local VERSION = "2.5.0+d737215"
 
 ----------------------------------------------------------------------
 -- data
@@ -1283,6 +1283,8 @@ local PCTS = {100, 90, 80, 70, 60}
 local uiIdx = 1                   -- default: 100% of BASE
 local pendingSize = nil           -- {w,h} to re-open the window at, applied after the frame
 local winX, winY = nil, nil        -- last window position (screen coords), nil = unknown
+local winW, winH = nil, nil        -- last drawable size, so a hand-resized (docked) window
+local winDock = nil                -- and its dock state come back exactly next launch
 local function levelSize(idx)
   local m = BASE * PCTS[idx] / 100
   return math.floor(W * m + 0.5), math.floor(H * m + 0.5)
@@ -1316,6 +1318,8 @@ local function saveState()
   set('keyPC', S.keyPC)     set('keyMode', S.keyMode) set('sevenths', S.sevenths and 1 or 0)
   set('mood', S.mood)       set('progSel', S.progSel) set('uiIdx', uiIdx)
   if winX and winY then set('winX', math.floor(winX)); set('winY', math.floor(winY)) end
+  if winW and winH then set('winW', math.floor(winW)); set('winH', math.floor(winH)) end
+  if winDock then set('winDock', math.floor(winDock)) end
 end
 local function loadState()
   local g = function(k) local v = reaper.GetExtState(EXT, k); return v ~= '' and v or nil end
@@ -1342,14 +1346,19 @@ local function loadState()
   if g('sevenths') then S.sevenths = g('sevenths') == '1' end
   local ui = n('uiIdx'); if ui and ui>=1 and ui<=#PCTS then uiIdx = math.floor(ui) end
   winX, winY = n('winX'), n('winY')
+  winW, winH = n('winW'), n('winH')
+  winDock = n('winDock')
 end
 loadState()
 
--- open at the remembered zoom size, and the remembered position if we have one
+-- open where and how we last were: the hand-resized size wins over the zoom preset, plus
+-- the remembered position and dock state, so a window docked tall on the side stays put
 do
   local w0, h0 = levelSize(uiIdx)
-  if winX and winY then gfx.init(TITLE, w0, h0, 0, winX, winY)
-  else gfx.init(TITLE, w0, h0, 0) end
+  w0, h0 = winW or w0, winH or h0
+  local dk = winDock or 0
+  if winX and winY then gfx.init(TITLE, w0, h0, dk, winX, winY)
+  else gfx.init(TITLE, w0, h0, dk) end
 end
 afterInit()
 
@@ -1480,52 +1489,65 @@ local function draw(dh)
 
   -- selectors
   y = 316 + bgrow
+  -- spread the control sections into the height the capped board left free, so the rows
+  -- breathe to fill a tall window instead of bunching under the fretboard. spread() returns
+  -- the extra gap to add at each section boundary (0 on a normal, non-tall window); each
+  -- section keeps its own internal layout, so labels stay glued to their chips.
+  local slack = grow - bgrow
+  local function spread(nGaps, natBottom)
+    if slack <= 0 or nGaps <= 0 then return 0 end
+    local room = (dh - 96 - 8) - (y + natBottom)   -- empty space below the last section
+    return math.max(0, math.min(room / nGaps, 80))
+  end
   if S.tab == 1 then
     -- key-first: pick the key, then quality, and the diatonic chords fall out of it
-    txt('KEY', 20, y, C.mute, 2)
+    local sp = spread(5, 380)
+    local kY, qY, inkY, crY, invY, stY =
+      y, y+56+sp, y+136+2*sp, y+210+3*sp, y+256+4*sp, y+306+5*sp
+    txt('KEY', 20, kY, C.mute, 2)
     for i,r in ipairs(ROOTS) do
       local x = 20 + (i-1)*46
-      if chip(x, y+18, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
+      if chip(x, kY+18, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
     end
-    if chip(578, y+18, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, y+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
+    if chip(578, kY+18, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
+    if chip(640, kY+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
 
-    txt('QUALITY', 20, y+56, C.mute, 2)
+    txt('QUALITY', 20, qY, C.mute, 2)
     for i,q in ipairs(QUALS) do
       local x = 20 + ((i-1)%8)*84
-      local yy = y + 74 + math.floor((i-1)/8)*30
+      local yy = qY + 18 + math.floor((i-1)/8)*30
       if chip(x, yy, 80, 26, q, q==S.qual, 2) then S.qual=q; S.inv=0; audition() end
     end
 
     -- the seven chords of the chosen key, one click each — or play them from the home
     -- row (a s d f g h j = I..vii°) and sing along; each chip shows its key in the corner.
-    drawInKeyStrip(y+136)
+    drawInKeyStrip(inkY)
 
-    txt('CHORD ROOT', 20, y+210, C.mute, 2)
+    txt('CHORD ROOT', 20, crY, C.mute, 2)
     for i,r in ipairs(ROOTS) do
       local x = 20 + ((i-1)%12)*56
-      if chip(x, y+228, 52, 26, r, r==S.root, 2) then S.root=r; S.inv=0; audition() end
+      if chip(x, crY+18, 52, 26, r, r==S.root, 2) then S.root=r; S.inv=0; audition() end
     end
 
     -- inversions: real hand-playable shapes; the ones with no shape are dimmed out
-    txt('INVERSION', 20, y+256, C.mute, 2)
+    txt('INVERSION', 20, invY, C.mute, 2)
     local invNames = {'root', '1st', '2nd', '3rd'}
     for iv=0,3 do
       local x = 20 + iv*88
       local avail = (iv==0) or (invertShape(S.root, S.qual, iv) ~= nil)
       if avail then
-        if chip(x, y+274, 84, 26, invNames[iv+1], S.inv==iv, 2) then S.inv=iv; audition() end
+        if chip(x, invY+18, 84, 26, invNames[iv+1], S.inv==iv, 2) then S.inv=iv; audition() end
       else
-        box(x, y+274, 84, 26, C.chip, true)
-        box(x, y+274, 84, 26, C.line, false)
-        txtc(invNames[iv+1], x, y+281, 84, {0.36,0.37,0.40}, 2)
+        box(x, invY+18, 84, 26, C.chip, true)
+        box(x, invY+18, 84, 26, C.line, false)
+        txtc(invNames[iv+1], x, invY+25, 84, {0.36,0.37,0.40}, 2)
       end
     end
 
-    txt('STRUM', 20, y+306, C.mute, 2)
+    txt('STRUM', 20, stY, C.mute, 2)
     for i,s in ipairs(STRUM) do
       local x = 20 + ((i-1)%5)*136
-      local yy = y + 324 + math.floor((i-1)/5)*30
+      local yy = stY + 18 + math.floor((i-1)/5)*30
       if iconChip(x, yy, 132, 26, i==S.strumIdx, s.name,
                   function(ix,iy,iw,ih,on) drawStrumIcon(ix,iy,iw,ih,s,on) end) then
         S.strumIdx=i; audition()
@@ -1534,40 +1556,44 @@ local function draw(dh)
   elseif S.tab == 2 then
     -- the ROOT selector is gone: the IN KEY strip below is now the root picker (its
     -- key + degree cover every root), so a separate chromatic ROOT row was redundant.
-    txt('KEY', 20, y, C.mute, 2)
+    local sp = spread(3, 270)
+    local kY, vY, pY, inkY = y, y+54+sp, y+90+2*sp, y+226+3*sp
+    txt('KEY', 20, kY, C.mute, 2)
     for i,r in ipairs(ROOTS) do
       local x = 20 + (i-1)*46
-      if chip(x, y+18, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
+      if chip(x, kY+18, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
     end
-    if chip(578, y+18, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, y+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-    if chip(20, y+54, 100, 26, S.three and '3-note' or '2-note', S.three, 2) then
+    if chip(578, kY+18, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
+    if chip(640, kY+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
+    if chip(20, vY, 100, 26, S.three and '3-note' or '2-note', S.three, 2) then
       S.three = not S.three; audition()
     end
-    txt('PATTERN', 20, y+90, C.mute, 2)
+    txt('PATTERN', 20, pY, C.mute, 2)
     for i,p in ipairs(POWER) do
       local x = 20 + ((i-1)%5)*136
-      local yy = y + 108 + math.floor((i-1)/5)*32
+      local yy = pY + 18 + math.floor((i-1)/5)*32
       if patternChip(x, yy, 132, 30, i==S.powerIdx, p.name, p) then S.powerIdx=i; audition() end
     end
     -- the home-row strip is the root picker: a s d f g h j set the power-chord root
-    drawInKeyStrip(y+226)
+    drawInKeyStrip(inkY)
   elseif S.tab==4 then
     -- the ROOT (pedal) selector is gone: the IN KEY strip below sets the pedal root by
     -- scale degree, so a separate chromatic ROOT row was redundant.
-    txt('SCALE', 20, y, C.mute, 2)
+    local sp = spread(4, 320)
+    local scY, rhY, rrY, kY, inkY = y, y+50+sp, y+170+2*sp, y+210+3*sp, y+276+4*sp
+    txt('SCALE', 20, scY, C.mute, 2)
     for i,s in ipairs(SCALES) do
       local x = 20 + (i-1)*136
-      if chip(x, y+18, 132, 26, s.name, s.key==S.scale, 2) then S.scale=s.key; audition() end
+      if chip(x, scY+18, 132, 26, s.name, s.key==S.scale, 2) then S.scale=s.key; audition() end
     end
-    txt('RHYTHM', 20, y+50, C.mute, 2)
+    txt('RHYTHM', 20, rhY, C.mute, 2)
     for i,p in ipairs(POWER) do
       local x = 20 + ((i-1)%5)*136
-      local yy = y + 68 + math.floor((i-1)/5)*32
+      local yy = rhY + 18 + math.floor((i-1)/5)*32
       if patternChip(x, yy, 132, 30, i==S.rhythmIdx, p.name, p) then S.rhythmIdx=i; audition() end
     end
     do
-      local bx, by, bw, bh = 20, y+170, 150, 30
+      local bx, by, bw, bh = 20, rrY, 150, 30
       local hov = hit(bx, by, bw, bh)
       box(bx, by, bw, bh, C.chip, true)
       box(bx, by, bw, bh, hov and C.mute or C.line, false)
@@ -1575,17 +1601,17 @@ local function draw(dh)
       txt('Re-roll', bx+36, by+(bh-12)/2-1, C.ink, 2)
       if clicked and hov then S.riffSeed = S.riffSeed + 1; audition() end
     end
-    txt('a new procedural line in the same scale + rhythm', 176, y+179, C.mute, 2)
+    txt('a new procedural line in the same scale + rhythm', 176, rrY+9, C.mute, 2)
     -- the Riff tab has no key of its own, so give it one here: the home-row strip then
     -- drives the pedal root by scale degree, just like Chords and Power.
-    txt('KEY', 20, y+210, C.mute, 2)
+    txt('KEY', 20, kY, C.mute, 2)
     for i,r in ipairs(ROOTS) do
       local x = 20 + (i-1)*46
-      if chip(x, y+228, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
+      if chip(x, kY+18, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
     end
-    if chip(578, y+228, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, y+228, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-    drawInKeyStrip(y+276)
+    if chip(578, kY+18, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
+    if chip(640, kY+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
+    drawInKeyStrip(inkY)
   elseif S.tab==5 then
     -- song inspector: the selected block's controls, plus arranging help
     txt('SONG', 20, y, C.mute, 2)
@@ -1710,8 +1736,9 @@ local function loop()
   -- (aspect preserved, letterboxed) and map the mouse back into canvas space
   local ww, wh = gfx.w, gfx.h
   do
-    local _, wx, wy = gfx.dock(-1, 0, 0, 0, 0)    -- reliable window position on macOS
-    if wx then winX, winY = wx, wy end
+    local dk, wx, wy = gfx.dock(-1, 0, 0, 0, 0)   -- dock state + position (macOS-safe)
+    if wx then winX, winY, winDock = wx, wy, dk end
+    winW, winH = ww, wh                            -- gfx.w/h is the size gfx.init expects
   end
   -- width governs the scale (never overflow); then grow the canvas *height* to exactly
   -- fill the window at that scale, so a tall docked window has no letterbox bars
@@ -1762,8 +1789,8 @@ local function loop()
   -- resize on an already-open window, so quit + init is the only way)
   if pendingSize then
     gfx.quit()
-    if winX and winY then gfx.init(TITLE, pendingSize.w, pendingSize.h, 0, winX, winY)
-    else gfx.init(TITLE, pendingSize.w, pendingSize.h, 0) end
+    if winX and winY then gfx.init(TITLE, pendingSize.w, pendingSize.h, winDock or 0, winX, winY)
+    else gfx.init(TITLE, pendingSize.w, pendingSize.h, winDock or 0) end
     afterInit()
     pendingSize, mousePrev = nil, 1               -- swallow the click that resized
   end
