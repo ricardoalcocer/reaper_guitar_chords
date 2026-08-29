@@ -3,10 +3,10 @@
   @description Browse guitar-voiced chords, audition them through the selected
                track's instrument, and insert them as MIDI at the edit cursor.
   @author generated for REAPER, no extensions required
-  @version 2.4.0+24ed46b
+  @version 2.4.0+42b1336
 --]]
 
-local VERSION = "2.4.0+24ed46b"
+local VERSION = "2.4.0+42b1336"
 
 ----------------------------------------------------------------------
 -- data
@@ -1519,49 +1519,42 @@ local function draw()
       end
     end
   elseif S.tab == 2 then
-    txt('ROOT', 20, y, C.mute, 2)
+    -- the ROOT selector is gone: the IN KEY strip below is now the root picker (its
+    -- key + degree cover every root), so a separate chromatic ROOT row was redundant.
+    txt('KEY', 20, y, C.mute, 2)
     for i,r in ipairs(ROOTS) do
-      local x = 20 + ((i-1)%12)*56
-      if chip(x, y+18, 52, 26, r..'5', r==S.proot, 2) then S.proot=r; audition() end
+      local x = 20 + (i-1)*46
+      if chip(x, y+18, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
     end
+    if chip(578, y+18, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
+    if chip(640, y+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
     if chip(20, y+54, 100, 26, S.three and '3-note' or '2-note', S.three, 2) then
       S.three = not S.three; audition()
     end
-    txt('KEY', 20, y+94, C.mute, 2)
-    for i,r in ipairs(ROOTS) do
-      local x = 20 + (i-1)*46
-      if chip(x, y+112, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
-    end
-    if chip(578, y+112, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, y+112, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-
-    txt('PATTERN', 20, y+148, C.mute, 2)
+    txt('PATTERN', 20, y+90, C.mute, 2)
     for i,p in ipairs(POWER) do
       local x = 20 + ((i-1)%5)*136
-      local yy = y + 166 + math.floor((i-1)/5)*32
+      local yy = y + 108 + math.floor((i-1)/5)*32
       if patternChip(x, yy, 132, 30, i==S.powerIdx, p.name, p) then S.powerIdx=i; audition() end
     end
-    -- same home-row strip as Chords: a s d f g h j set the power-chord root by degree
-    drawInKeyStrip(y+280)
+    -- the home-row strip is the root picker: a s d f g h j set the power-chord root
+    drawInKeyStrip(y+226)
   elseif S.tab==4 then
-    txt('ROOT', 20, y, C.mute, 2)
-    for i,r in ipairs(ROOTS) do
-      local x = 20 + ((i-1)%12)*56
-      if chip(x, y+18, 52, 26, r, r==S.rroot, 2) then S.rroot=r; audition() end
-    end
-    txt('SCALE', 20, y+52, C.mute, 2)
+    -- the ROOT (pedal) selector is gone: the IN KEY strip below sets the pedal root by
+    -- scale degree, so a separate chromatic ROOT row was redundant.
+    txt('SCALE', 20, y, C.mute, 2)
     for i,s in ipairs(SCALES) do
       local x = 20 + (i-1)*136
-      if chip(x, y+70, 132, 26, s.name, s.key==S.scale, 2) then S.scale=s.key; audition() end
+      if chip(x, y+18, 132, 26, s.name, s.key==S.scale, 2) then S.scale=s.key; audition() end
     end
-    txt('RHYTHM', 20, y+102, C.mute, 2)
+    txt('RHYTHM', 20, y+50, C.mute, 2)
     for i,p in ipairs(POWER) do
       local x = 20 + ((i-1)%5)*136
-      local yy = y + 120 + math.floor((i-1)/5)*32
+      local yy = y + 68 + math.floor((i-1)/5)*32
       if patternChip(x, yy, 132, 30, i==S.rhythmIdx, p.name, p) then S.rhythmIdx=i; audition() end
     end
     do
-      local bx, by, bw, bh = 20, y+222, 150, 30
+      local bx, by, bw, bh = 20, y+170, 150, 30
       local hov = hit(bx, by, bw, bh)
       box(bx, by, bw, bh, C.chip, true)
       box(bx, by, bw, bh, hov and C.mute or C.line, false)
@@ -1569,17 +1562,17 @@ local function draw()
       txt('Re-roll', bx+36, by+(bh-12)/2-1, C.ink, 2)
       if clicked and hov then S.riffSeed = S.riffSeed + 1; audition() end
     end
-    txt('a new procedural line in the same scale + rhythm', 176, y+231, C.mute, 2)
+    txt('a new procedural line in the same scale + rhythm', 176, y+179, C.mute, 2)
     -- the Riff tab has no key of its own, so give it one here: the home-row strip then
     -- drives the pedal root by scale degree, just like Chords and Power.
-    txt('KEY', 20, y+262, C.mute, 2)
+    txt('KEY', 20, y+210, C.mute, 2)
     for i,r in ipairs(ROOTS) do
       local x = 20 + (i-1)*46
-      if chip(x, y+280, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
+      if chip(x, y+228, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
     end
-    if chip(578, y+280, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, y+280, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-    drawInKeyStrip(y+328)
+    if chip(578, y+228, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
+    if chip(640, y+228, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
+    drawInKeyStrip(y+276)
   elseif S.tab==5 then
     -- song inspector: the selected block's controls, plus arranging help
     txt('SONG', 20, y, C.mute, 2)
