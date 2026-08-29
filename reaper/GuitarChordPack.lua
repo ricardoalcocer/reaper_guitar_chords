@@ -3,10 +3,10 @@
   @description Browse guitar-voiced chords, audition them through the selected
                track's instrument, and insert them as MIDI at the edit cursor.
   @author generated for REAPER, no extensions required
-  @version 2.4.0+92a5f9e
+  @version 2.4.0+70d4550
 --]]
 
-local VERSION = "2.4.0+92a5f9e"
+local VERSION = "2.4.0+70d4550"
 
 ----------------------------------------------------------------------
 -- data
@@ -1545,19 +1545,19 @@ local function draw()
       local x = 20 + ((i-1)%12)*56
       if chip(x, y+18, 52, 26, r, r==S.rroot, 2) then S.rroot=r; audition() end
     end
-    txt('SCALE', 20, y+58, C.mute, 2)
+    txt('SCALE', 20, y+52, C.mute, 2)
     for i,s in ipairs(SCALES) do
       local x = 20 + (i-1)*136
-      if chip(x, y+76, 132, 26, s.name, s.key==S.scale, 2) then S.scale=s.key; audition() end
+      if chip(x, y+70, 132, 26, s.name, s.key==S.scale, 2) then S.scale=s.key; audition() end
     end
-    txt('RHYTHM', 20, y+116, C.mute, 2)
+    txt('RHYTHM', 20, y+102, C.mute, 2)
     for i,p in ipairs(POWER) do
       local x = 20 + ((i-1)%5)*136
-      local yy = y + 134 + math.floor((i-1)/5)*32
+      local yy = y + 120 + math.floor((i-1)/5)*32
       if patternChip(x, yy, 132, 30, i==S.rhythmIdx, p.name, p) then S.rhythmIdx=i; audition() end
     end
     do
-      local bx, by, bw, bh = 20, y+244, 150, 30
+      local bx, by, bw, bh = 20, y+222, 150, 30
       local hov = hit(bx, by, bw, bh)
       box(bx, by, bw, bh, C.chip, true)
       box(bx, by, bw, bh, hov and C.mute or C.line, false)
@@ -1565,17 +1565,17 @@ local function draw()
       txt('Re-roll', bx+36, by+(bh-12)/2-1, C.ink, 2)
       if clicked and hov then S.riffSeed = S.riffSeed + 1; audition() end
     end
-    txt('a new procedural line in the same scale + rhythm', 176, y+253, C.mute, 2)
+    txt('a new procedural line in the same scale + rhythm', 176, y+231, C.mute, 2)
     -- the Riff tab has no key of its own, so give it one here: the home-row strip then
     -- drives the pedal root by scale degree, just like Chords and Power.
-    txt('KEY', 20, y+294, C.mute, 2)
+    txt('KEY', 20, y+262, C.mute, 2)
     for i,r in ipairs(ROOTS) do
       local x = 20 + (i-1)*46
-      if chip(x, y+312, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
+      if chip(x, y+280, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
     end
-    if chip(578, y+312, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, y+312, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-    drawInKeyStrip(y+348)
+    if chip(578, y+280, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
+    if chip(640, y+280, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
+    drawInKeyStrip(y+328)
   elseif S.tab==5 then
     -- song inspector: the selected block's controls, plus arranging help
     txt('SONG', 20, y, C.mute, 2)
