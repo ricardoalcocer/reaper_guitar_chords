@@ -8,7 +8,8 @@
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
-       font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:18px}
+       font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:18px 18px 64px}
+  body.ar-open{padding-bottom:var(--ar-h,150px)}
   .wrap{max-width:760px;margin:0 auto}
   h1{font:600 15px/1 system-ui;letter-spacing:.02em;margin:0}
   .sub{color:var(--mute);font-size:12px;margin:4px 0 16px}
@@ -74,6 +75,41 @@
     .cell{height:22px;font-size:9px}
   }
   @media (prefers-reduced-motion:reduce){.str,.dot{transition:none}}
+
+  /* ---------- arranger strip ---------- */
+  #arranger{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--panel);
+            border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.35);
+            display:flex;flex-direction:column}
+  #ar-resize{height:6px;cursor:ns-resize;background:linear-gradient(var(--line),transparent);opacity:0}
+  #arranger.open #ar-resize{opacity:1}
+  #ar-bar{display:flex;gap:8px;align-items:center;padding:8px 14px;flex-wrap:wrap}
+  #ar-title{font:600 12px/1 system-ui;letter-spacing:.04em;color:var(--ink);
+            display:flex;align-items:center;gap:7px;cursor:pointer;background:none;border:0;padding:4px 2px}
+  #ar-title .tri{color:var(--mute);transition:transform .15s;font-size:10px}
+  #arranger.open #ar-title .tri{transform:rotate(90deg)}
+  #ar-count{color:var(--mute);font:11px var(--mono)}
+  #ar-msg{color:var(--amber);font:11px var(--mono);margin-left:2px;min-height:1em}
+  #ar-lane{display:none;position:relative;height:calc(var(--ar-h,150px) - 60px);
+           overflow-x:auto;overflow-y:hidden;
+           background:repeating-linear-gradient(90deg,#25272c,#25272c 1px,transparent 1px,transparent var(--ar-beat,64px));
+           border-top:1px solid var(--line);margin:0 8px 10px;border-radius:4px;touch-action:none}
+  #arranger.open #ar-lane{display:block}
+  #ar-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+            color:var(--mute);font-size:12px;pointer-events:none;padding:0 12px;text-align:center}
+  .ar-block{position:absolute;top:12px;bottom:12px;
+            background:var(--amber-dim);border:1px solid #3E6DA8;border-radius:4px;
+            color:#DCE8FB;font:600 12px var(--mono);cursor:grab;user-select:none;
+            display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0 6px;
+            box-sizing:border-box}
+  .ar-block.pow{background:#3a2f1c;border-color:#7a5a2a;color:#f0d9a8}
+  .ar-block.now{outline:2px solid var(--amber);outline-offset:-2px;background:var(--amber);color:#fff}
+  .ar-block.drag{cursor:grabbing;opacity:.9;z-index:3;box-shadow:0 3px 12px rgba(0,0,0,.4)}
+  .ar-block .ar-lbl{pointer-events:none;text-align:center;line-height:1.2}
+  .ar-block .ar-rm{position:absolute;top:0;right:4px;font:700 13px system-ui;color:#fff;opacity:.5;
+                   cursor:pointer;line-height:1.2}
+  .ar-block .ar-rm:hover{opacity:1}
+  .ar-block .ar-grip{position:absolute;top:0;bottom:0;width:9px;right:0;cursor:ew-resize}
+  .ar-block .ar-grip:hover{background:rgba(255,255,255,.15)}
 </style>
 
 <div class="wrap">
@@ -100,6 +136,7 @@
         <button class="btn" id="c-up">Strum up</button>
         <button class="btn" id="c-arp">Arpeggio</button>
         <button class="btn toggle" id="c-pm" aria-pressed="false">Palm mute</button>
+        <button class="btn" id="c-add" title="Add this chord to the arranger">+ Strip</button>
       </div>
     </div>
     <div class="panel">
@@ -127,6 +164,7 @@
         <button class="btn primary" id="s-play">Play</button>
         <label class="ctl">Tempo <input type="range" id="s-bpm" min="60" max="160" value="100">
           <span id="s-bpmv" style="font-family:var(--mono);color:var(--ink)">100</span></label>
+        <button class="btn" id="s-add" title="Add this strum pattern to the arranger">+ Strip</button>
       </div>
     </div>
     <div class="panel">
@@ -149,6 +187,7 @@
         <button class="btn toggle" id="p-drive" aria-pressed="true">Drive</button>
         <label class="ctl">Tempo <input type="range" id="p-bpm" min="80" max="200" value="120">
           <span id="p-bpmv" style="font-family:var(--mono);color:var(--ink)">120</span></label>
+        <button class="btn" id="p-add" title="Add this power-chord riff to the arranger">+ Strip</button>
       </div>
     </div>
     <div class="panel">
@@ -169,6 +208,7 @@
         <button class="btn primary" id="pg-play">Play</button>
         <label class="ctl">Tempo <input type="range" id="pg-bpm" min="60" max="200" value="100">
           <span id="pg-bpmv" style="font-family:var(--mono);color:var(--ink)">100</span></label>
+        <button class="btn" id="pg-add" title="Add every chord of this progression to the arranger">+ Strip</button>
       </div>
     </div>
     <div class="panel">
@@ -186,6 +226,23 @@
 
   <p class="note" id="footnote">Audio starts on your first tap. Everything here matches the MIDI: same
     voicings, same stroke directions, same note lengths.</p>
+</div>
+
+<!-- ARRANGER STRIP -->
+<div id="arranger">
+  <div id="ar-resize" title="Drag to resize the arranger"></div>
+  <div id="ar-bar">
+    <button id="ar-title" aria-expanded="false"><span class="tri">&#9654;</span> Arranger <span id="ar-count">(0)</span></button>
+    <button class="btn primary" id="ar-play">Play</button>
+    <button class="btn" id="ar-export">Export MIDI</button>
+    <button class="btn" id="ar-clear">Clear</button>
+    <label class="ctl">Tempo <input type="range" id="ar-bpm" min="60" max="200" value="120">
+      <span id="ar-bpmv" style="font-family:var(--mono);color:var(--ink)">120</span></label>
+    <span id="ar-msg" role="status" aria-live="polite"></span>
+  </div>
+  <div id="ar-lane">
+    <div id="ar-empty">Audition a chord, power chord, or pattern, then press &ldquo;+ Strip&rdquo; to drop it here.</div>
+  </div>
 </div>
 
 <script>
@@ -343,18 +400,13 @@ function play(midi, when, vel, kind, drive, voice){
 }
 /* stroke shapes, in beats — identical spreads to the MIDI files */
 const SPREAD = {D:14/480, U:9/480, P:4/480, x:10/480};
+/* stroke() plays a strum; the per-string event list it plays is computed by
+   strokeEvents() in the arranger core, so audition and MIDI export share one source. */
 function stroke(frets, kind, when, spb, drive, litFn){
-  const notes = frets.map((f,i)=> f===null?null:[i,OPEN[i]+f]).filter(Boolean);
-  let order = notes, vels, art;
-  if(kind==='D'){ vels=[96,92,88,85,82,88].slice(-notes.length); art='open'; }
-  else if(kind==='U'){ order=notes.slice(-4).reverse(); vels=[78,74,72,70]; art='open'; }
-  else if(kind==='x'){ vels=notes.map(()=>44); art='ghost'; }
-  else { vels=[104,100,96,92,88,88].slice(-notes.length); art='mute'; }
-  const sp = SPREAD[kind]*spb;
-  order.forEach(([si,midi],i)=>{
-    const t = when + i*sp;
-    play(midi, t, vels[i]||70, art, drive, si);
-    if(litFn) litFn(si, t, art==='open'?260:150);
+  strokeEvents(frets, kind).forEach(e=>{
+    const t = when + e.offBeat*spb;
+    play(e.midi, t, e.vel, e.art, drive, e.si);
+    if(litFn) litFn(e.si, t, e.art==='open'?260:150);
   });
 }
 
@@ -425,6 +477,104 @@ function powerChord(root, three){
   }).sort((a,b)=>a[0]-b[0]);
   return cands[0][1];
 }
+
+/* ==================== ARRANGER CORE (pure, DOM-free, testable) ====================
+   tests/test_arranger.js slices this block verbatim and evals it. Keep it free of any
+   document / window / AR references — only pure functions and the constants above. */
+
+// per-string events of one strum — the single source shared by stroke() and arrangeToMidi()
+function strokeEvents(frets, kind){
+  const notes = frets.map((f,i)=> f===null?null:[i,OPEN[i]+f]).filter(Boolean);
+  let order = notes, vels, art;
+  if(kind==='D'){ vels=[96,92,88,85,82,88].slice(-notes.length); art='open'; }
+  else if(kind==='U'){ order=notes.slice(-4).reverse(); vels=[78,74,72,70]; art='open'; }
+  else if(kind==='x'){ vels=notes.map(()=>44); art='ghost'; }
+  else { vels=[104,100,96,92,88,88].slice(-notes.length); art='mute'; }
+  return order.map(([si,midi],i)=>({si, midi, offBeat:i*SPREAD[kind], vel:vels[i]||70, art}));
+}
+// a block resolves to a fret shape by REFERENCE (CHORDS / powerChord), never a stored copy
+function blockFrets(b){
+  return b.source==='power' ? powerChord(b.root, b.three) : CHORDS[b.root][b.quality].frets;
+}
+function blockLabel(b){
+  return b.source==='power' ? b.root+'5' : CHORDS[b.root][b.quality].label;
+}
+// natural content length in beats, before any user stretch
+function blockNatural(b){
+  if(b.kind==='chord') return 1;
+  if(b.source==='strum') return 4;                        // 8 slots × ½ beat
+  const pp=POWER_PATS[b.patternId]; return pp.p.length/pp.div;
+}
+// the strums a block emits: {atBeat (relative to block start), kind, drive}
+function blockStrokes(b){
+  const scale = b.lengthBeats / blockNatural(b);
+  if(b.kind==='chord') return [{atBeat:0, kind:b.palmMute?'P':'D', drive:false}];
+  if(b.source==='strum'){
+    const out=[]; STRUM_PATS[b.patternId].forEach((k,i)=>{ if(k) out.push({atBeat:i*0.5*scale, kind:k, drive:false}); });
+    return out;
+  }
+  const pp=POWER_PATS[b.patternId], out=[];
+  pp.p.forEach((k,i)=>{ if(k) out.push({atBeat:(i/pp.div)*scale, kind:k, drive:!!b.drive}); });
+  return out;
+}
+// flat note events of a block: {si, midi, startBeat (relative to block start), vel, art}
+function blockNoteEvents(b){
+  const frets = blockFrets(b), out=[];
+  blockStrokes(b).forEach(s=>{
+    strokeEvents(frets, s.kind).forEach(e=>{
+      out.push({si:e.si, midi:e.midi, startBeat:s.atBeat + e.offBeat, vel:e.vel, art:e.art});
+    });
+  });
+  return out;
+}
+
+/* ---- Standard MIDI File writer: format 0, 480 TPQ, no external library ---- */
+const TPQ = 480;                                          // 480 lines up with the /480 spreads
+const ART_SECONDS = {open:2.4, mute:0.34, ghost:0.12};    // ring times, from play()
+function vlq(n){                                          // variable-length quantity
+  let buf=[n & 0x7f]; n = Math.floor(n/128);
+  while(n>0){ buf.unshift((n & 0x7f)|0x80); n = Math.floor(n/128); }
+  return buf;
+}
+function u32(n){ return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255]; }
+function arrangeToMidi(strip){
+  const blocks = strip.blocks;
+  if(!blocks || !blocks.length) return null;              // nothing to export (FR-015)
+  const bpm = strip.bpm||120, secPerBeat = 60/bpm;
+  let notes=[];                                           // {startTick,endTick,midi,vel,si}
+  blocks.forEach(b=>{
+    blockNoteEvents(b).forEach(e=>{
+      const startTick = Math.round((b.startBeat + e.startBeat)*TPQ);
+      const ringTicks = Math.max(1, Math.round((ART_SECONDS[e.art]/secPerBeat)*TPQ));
+      notes.push({startTick, endTick:startTick+ringTicks, midi:e.midi, vel:e.vel, si:e.si});
+    });
+  });
+  // clamp each note so it never overlaps the next hit on the SAME string (test_events invariant)
+  const byString={};
+  notes.forEach(n=>{ (byString[n.si]=byString[n.si]||[]).push(n); });
+  Object.keys(byString).forEach(k=>{
+    const list=byString[k]; list.sort((a,b)=>a.startTick-b.startTick);
+    for(let i=0;i<list.length-1;i++){
+      const gapEnd = list[i+1].startTick - 1;
+      if(list[i].endTick > gapEnd) list[i].endTick = Math.max(list[i].startTick+1, gapEnd);
+    }
+  });
+  const evs=[];
+  notes.forEach(n=>{ evs.push({tick:n.startTick, on:1, midi:n.midi, vel:n.vel});
+                     evs.push({tick:n.endTick, on:0, midi:n.midi, vel:0}); });
+  evs.sort((a,b)=> a.tick-b.tick || a.on-b.on);            // note-offs before note-ons at equal tick
+  let trk=[]; const push=(...xs)=>xs.forEach(x=>trk.push(x));
+  push(...vlq(0), 0xFF,0x51,0x03, ...u32(Math.round(60000000/bpm)).slice(1)); // tempo (3 bytes)
+  push(...vlq(0), 0xC0, (strip.program||25)&0x7f);        // program change, channel 0
+  let last=0;
+  evs.forEach(e=>{ push(...vlq(e.tick-last)); last=e.tick;
+    if(e.on) push(0x90, e.midi&0x7f, e.vel&0x7f); else push(0x80, e.midi&0x7f, 0); });
+  push(...vlq(0), 0xFF,0x2F,0x00);                         // end of track
+  const header=[0x4D,0x54,0x68,0x64, ...u32(6), 0,0, 0,1, (TPQ>>8)&255, TPQ&255];
+  const track =[0x4D,0x54,0x72,0x6B, ...u32(trk.length), ...trk];
+  return new Uint8Array(header.concat(track));
+}
+/* ==================== END ARRANGER CORE ==================== */
 
 /* ---------- transport ---------- */
 let T = null;
@@ -672,4 +822,153 @@ document.addEventListener('keydown',e=>{
 });
 drawChords(); drawStrum(); buildStrumPats(); drawPower(); buildPowerPats();
 drawProg(); buildProgList();
+
+/* ==================== ARRANGER UI (DOM) ==================== */
+const AR = { blocks:[], bpm:120, grid:0.25, program:25, px:64, h:150, seq:0, open:false };
+const arLane = $('ar-lane');
+function arMsg(t){ $('ar-msg').textContent = t||''; }
+function arQuant(beat){ return Math.max(0, Math.round(beat/AR.grid)*AR.grid); }
+function arTotal(){ return AR.blocks.reduce((m,b)=>Math.max(m,b.startBeat+b.lengthBeats),0); }
+
+function arRender(){
+  $('ar-count').textContent = `(${AR.blocks.length})`;
+  document.documentElement.style.setProperty('--ar-h', AR.h+'px');
+  document.documentElement.style.setProperty('--ar-beat', AR.px+'px');
+  $('ar-empty').style.display = AR.blocks.length ? 'none' : 'flex';
+  [...arLane.querySelectorAll('.ar-block')].forEach(e=>e.remove());
+  arLane.style.minWidth = Math.max(0,(arTotal()+2)*AR.px)+'px';
+  AR.blocks.forEach((b,idx)=>{
+    const el=document.createElement('div');
+    el.className='ar-block'+(b.source==='power'?' pow':'');
+    el.style.left=(b.startBeat*AR.px)+'px';
+    el.style.width=Math.max(10,(b.lengthBeats*AR.px-2))+'px';
+    el.innerHTML=`<span class="ar-lbl">${blockLabel(b)}</span>`
+      +`<span class="ar-rm" title="Remove">&times;</span><span class="ar-grip" title="Drag to resize"></span>`;
+    b.el=el; el.dataset.i=idx; arWireBlock(el,b); arLane.append(el);
+  });
+}
+function arAdd(cap){
+  const b = Object.assign({id:++AR.seq, startBeat:arQuant(arTotal())}, cap);
+  b.lengthBeats = cap.lengthBeats || blockNatural(b);
+  AR.blocks.push(b); arRender(); arSave();
+  arMsg(`Added ${blockLabel(b)}`);
+  if(!AR.open) arToggle(true);
+}
+/* capture the current audition state of each tab */
+function capChord(){ return {kind:'chord', source:'chords', root:cRoot, quality:cQual, palmMute:cPM}; }
+function capStrum(){ const [r,q]=SC[sChord]; return {kind:'pattern', source:'strum', root:r, quality:q, patternId:sPat}; }
+function capPower(){ return {kind:'pattern', source:'power', root:pRoot, three:pThree, drive:pDrive, patternId:pPat}; }
+function addProg(){
+  const p=currentProg(); if(!p){ arMsg('No progression selected.'); return; }
+  const cs=progChords(p);
+  cs.forEach(c=> arAdd({kind:'chord', source:'chords', root:c.root, quality:c.q, palmMute:false}));
+  arMsg(`Added ${cs.length} chords from ${p.name||pgMood}`);
+}
+$('c-add').onclick=()=>arAdd(capChord());
+$('s-add').onclick=()=>arAdd(capStrum());
+$('p-add').onclick=()=>arAdd(capPower());
+$('pg-add').onclick=addProg;
+
+/* per-block drag (reposition), edge-resize, and remove */
+function arWireBlock(el,b){
+  const paint=()=>{ el.style.left=(b.startBeat*AR.px)+'px';
+                    el.style.width=Math.max(10,(b.lengthBeats*AR.px-2))+'px'; };
+  el.querySelector('.ar-rm').onclick=(e)=>{ e.stopPropagation();
+    AR.blocks=AR.blocks.filter(x=>x!==b); arRender(); arSave(); arMsg('Removed a block.'); };
+  const grip=el.querySelector('.ar-grip');
+  grip.onpointerdown=(e)=>{ e.stopPropagation(); e.preventDefault();
+    const x0=e.clientX, len0=b.lengthBeats; grip.setPointerCapture(e.pointerId);
+    const mv=(ev)=>{ b.lengthBeats=Math.max(AR.grid, arQuant(len0+(ev.clientX-x0)/AR.px)); paint(); };
+    const up=()=>{ grip.removeEventListener('pointermove',mv); grip.removeEventListener('pointerup',up);
+                   arReflow(); arRender(); arSave(); };
+    grip.addEventListener('pointermove',mv); grip.addEventListener('pointerup',up);
+  };
+  el.onpointerdown=(e)=>{
+    if(e.target.classList.contains('ar-grip')||e.target.classList.contains('ar-rm')) return;
+    e.preventDefault(); el.classList.add('drag'); el.setPointerCapture(e.pointerId);
+    const x0=e.clientX, beat0=b.startBeat;
+    const mv=(ev)=>{ b.startBeat=Math.max(0, arQuant(beat0+(ev.clientX-x0)/AR.px)); paint(); };
+    const up=()=>{ el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up);
+                   el.classList.remove('drag'); arReflow(); arRender(); arSave(); };
+    el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up);
+  };
+}
+/* keep blocks on the single lane disjoint and in timeline order (FR-009) */
+function arReflow(){
+  AR.blocks.sort((a,b)=> a.startBeat-b.startBeat || a.id-b.id);
+  let cursor=0;
+  AR.blocks.forEach(b=>{ if(b.startBeat<cursor) b.startBeat=cursor; cursor=b.startBeat+b.lengthBeats; });
+}
+/* strip resize (whole area height) */
+$('ar-resize').onpointerdown=(e)=>{ e.preventDefault(); const y0=e.clientY, h0=AR.h;
+  const r=$('ar-resize'); r.setPointerCapture(e.pointerId);
+  const mv=(ev)=>{ AR.h=Math.min(440, Math.max(96, h0+(y0-ev.clientY)));
+                   document.documentElement.style.setProperty('--ar-h', AR.h+'px'); };
+  const up=()=>{ r.removeEventListener('pointermove',mv); r.removeEventListener('pointerup',up); arSave(); };
+  r.addEventListener('pointermove',mv); r.addEventListener('pointerup',up);
+};
+function arToggle(force){
+  AR.open = force===undefined ? !AR.open : force;
+  $('arranger').classList.toggle('open', AR.open);
+  $('ar-title').setAttribute('aria-expanded', AR.open);
+  document.body.classList.toggle('ar-open', AR.open);
+}
+$('ar-title').onclick=()=>arToggle();
+$('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; AR.blocks=[]; arRender(); arSave(); arMsg('Cleared.'); };
+
+/* play the strip in sequence through the existing transport */
+function arPlay(){
+  if(T){ stopAll(); return; }
+  if(!AR.blocks.length){ arMsg('Strip is empty — nothing to play.'); return; }
+  const spb=60/AR.bpm, endBeat=arTotal(), hits=[];
+  AR.blocks.forEach((b,idx)=>{ const frets=blockFrets(b);
+    blockStrokes(b).forEach(s=> hits.push({beat:b.startBeat+s.atBeat, frets, kind:s.kind, drive:s.drive, idx})); });
+  hits.sort((a,b)=>a.beat-b.beat);
+  if(!hits.length){ arMsg('Nothing to play.'); return; }
+  const cells=AR.blocks.map(b=>b.el);
+  arMsg('Playing…');
+  start($('ar-play'), cells, (i,when)=>{
+    if(i>=hits.length){
+      setTimeout(()=>{ if(T&&T.btn===$('ar-play')){ stopAll(); arMsg(''); } },
+                 Math.max(0,(when-ctx.currentTime))*1000+1600);
+      return {slot:-1, dur:1};
+    }
+    const h=hits[i];
+    stroke(h.frets, h.kind, when, spb, h.drive, null);
+    const dur=((i+1<hits.length?hits[i+1].beat:Math.max(h.beat+0.5,endBeat))-h.beat)*spb;
+    return {slot:h.idx, dur:Math.max(0.03,dur)};
+  });
+}
+$('ar-play').onclick=arPlay;
+
+/* export the strip as a downloadable .mid */
+function arExport(){
+  const bytes=arrangeToMidi(AR);
+  if(!bytes){ arMsg('Strip is empty — nothing to export.'); return; }
+  const url=URL.createObjectURL(new Blob([bytes], {type:'audio/midi'}));
+  const a=document.createElement('a'); a.href=url; a.download='arrangement.mid';
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  arMsg(`Exported a ${AR.blocks.length}-block arrangement.`);
+}
+$('ar-export').onclick=arExport;
+$('ar-bpm').oninput=e=>{ AR.bpm=+e.target.value; $('ar-bpmv').textContent=e.target.value; arSave(); };
+
+/* persistence — first localStorage use in the tool; secondary, guarded (research R7) */
+function arSave(){
+  try{ localStorage.setItem('gcp-arranger', JSON.stringify({
+    blocks:AR.blocks.map(b=>({kind:b.kind,source:b.source,root:b.root,quality:b.quality,
+      patternId:b.patternId,palmMute:!!b.palmMute,three:!!b.three,drive:!!b.drive,
+      startBeat:b.startBeat,lengthBeats:b.lengthBeats})),
+    bpm:AR.bpm, program:AR.program, h:AR.h })); }catch(e){}
+}
+function arLoad(){
+  try{ const s=JSON.parse(localStorage.getItem('gcp-arranger')); if(!s) return;
+    AR.bpm=s.bpm||120; AR.program=s.program||25; AR.h=s.h||150;
+    AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
+      .filter(b=>{ try{ blockFrets(b); return true; }catch(e){ return false; } });
+    $('ar-bpm').value=AR.bpm; $('ar-bpmv').textContent=AR.bpm;
+  }catch(e){ AR.blocks=[]; }
+}
+arLoad(); arRender(); if(AR.blocks.length) arToggle(true);
 </script>
