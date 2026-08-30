@@ -127,7 +127,7 @@
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+c7d765b</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+41faa78</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
@@ -180,7 +180,8 @@
       </div>
     </div>
     <div class="panel">
-      <p class="eyebrow">Chord</p><div class="chips" id="s-chords"></div>
+      <p class="eyebrow">Root</p><div class="chips" id="s-roots"></div>
+      <p class="eyebrow" style="margin-top:14px">Quality</p><div class="chips" id="s-quals"></div>
       <p class="eyebrow" style="margin-top:14px">Pattern &mdash; D down, U up, &times; muted click</p>
       <div id="s-pats"></div>
     </div>
@@ -729,17 +730,18 @@ $('c-arp').onclick=()=>strumC('arp');
 $('c-pm').onclick=e=>{cPM=!cPM;e.target.setAttribute('aria-pressed',cPM);strumC('D');};
 
 /* ---------- strumming tab ---------- */
-const SC = {E:['E','maj'],Em:['E','m'],F:['F','maj'],Fm:['F','m'],G:['G','maj'],
-            Am:['A','m'],D:['D','maj'],Dm:['D','m'],C:['C','maj']};
-let sChord='Am', sPat='classic', sCells=[];
+let sRoot='A', sQual='m', sPat='classic', sCells=[];    // any chord, not a fixed shortlist
 function drawStrum(){
-  const [r,q]=SC[sChord], d=CHORDS[r][q];
+  const d=CHORDS[sRoot][sQual];
   $('s-name').textContent=d.label; $('s-dia').textContent=d.dia;
   $('s-board').innerHTML = board(d.frets,'sb');
-  [...$('s-chords').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===sChord));
+  [...$('s-roots').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===sRoot));
+  [...$('s-quals').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===sQual));
 }
-Object.keys(SC).forEach(c=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=c;
-  b.textContent=c; b.onclick=()=>{sChord=c;drawStrum(); if(T) playStrum(true);}; $('s-chords').append(b); });
+ROOTS.forEach(r=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=r;
+  b.textContent=r; b.onclick=()=>{sRoot=r;drawStrum(); if(T) playStrum(true);}; $('s-roots').append(b); });
+QUALS.forEach(([q,l])=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=q;
+  b.textContent=l; b.onclick=()=>{sQual=q;drawStrum(); if(T) playStrum(true);}; $('s-quals').append(b); });
 function buildStrumPats(){
   $('s-pats').innerHTML='';
   Object.entries(STRUM_PATS).forEach(([name,pat])=>{
@@ -759,8 +761,8 @@ function playStrum(force){
   const lit=lighter('sb');
   start($('s-play'), cells, (i,when)=>{
     const slot=i%8, spb=60/bpm, dur=spb/2;
-    const [r,q]=SC[sChord], k=pat[slot];
-    if(k) stroke(CHORDS[r][q].frets, k, when, spb, false, lit);
+    const k=pat[slot];
+    if(k) stroke(CHORDS[sRoot][sQual].frets, k, when, spb, false, lit);
     return {slot, dur};
   });
 }
@@ -955,7 +957,7 @@ function arAdd(cap){
 }
 /* capture the current audition of each tab, replayed exactly (no invented rhythm) */
 function capChord(){ return {source:'chord', root:cRoot, quality:cQual}; }              // a single strum
-function capStrum(){ const [r,q]=SC[sChord]; return {source:'strum', root:r, quality:q, patternId:sPat}; }
+function capStrum(){ return {source:'strum', root:sRoot, quality:sQual, patternId:sPat}; }
 function capPower(){ return {source:'power', root:pRoot, three:pThree, drive:pDrive, patternId:pPat}; }
 function capProg(){ const p=currentProg(); if(!p) return null;
   return {source:'prog', chords:progChords(p).map(c=>({root:c.root, quality:c.q})), name:p.name||null, patternId:pgPat}; }
