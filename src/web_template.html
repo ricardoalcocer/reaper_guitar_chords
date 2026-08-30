@@ -257,6 +257,7 @@
     <button id="ar-title" aria-expanded="false"><span class="tri">&#9654;</span> Song <span id="ar-count">(0 bars)</span></button>
     <button class="btn primary" id="ar-play">Play</button>
     <button class="btn toggle" id="ar-loop" aria-pressed="false">Loop</button>
+    <button class="btn toggle" id="ar-metro" aria-pressed="false" title="Metronome click while the song plays">Click</button>
     <button class="btn" id="ar-export">Export MIDI</button>
     <button class="btn" id="ar-clear">Clear</button>
     <label class="ctl">Tempo <input type="range" id="ar-bpm" min="60" max="200" value="120">
@@ -472,6 +473,18 @@ function hush(){
   const t = ctx ? ctx.currentTime : 0;
   live.forEach(({g,src})=>{ try{ g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t);
     g.gain.linearRampToValueAtTime(0, t+.04); src.stop(t+.06); }catch(e){} });
+}
+/* metronome click — a short ping; accent (louder/higher) on the downbeat */
+function click(when, accent){
+  audio();
+  const o=ctx.createOscillator(), g=ctx.createGain();
+  o.type='triangle'; o.frequency.value = accent?1900:1250;
+  const t=Math.max(when, ctx.currentTime);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(accent?0.5:0.32, t+0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.05);
+  o.connect(g); g.connect(master);
+  o.start(t); o.stop(t+0.06);
 }
 /* stroke shapes, in beats — identical spreads to the MIDI files */
 const SPREAD = {D:14/480, U:9/480, P:4/480, x:10/480, A:0.25};   // A = arpeggio: a 1/16 note between strings
@@ -690,7 +703,7 @@ function arrangeToMidi(strip){
 /* ---------- transport ---------- */
 let T = null;
 function stopAll(){
-  if(T){ clearInterval(T.timer); if(T.stopTimer) clearTimeout(T.stopTimer);
+  if(T){ clearInterval(T.timer); if(T.stopTimer) clearTimeout(T.stopTimer); if(T.metroTimer) clearInterval(T.metroTimer);
     T.cells&&T.cells.forEach(c=>c.classList.remove('now'));
     T.btn.textContent='Play'; T.btn.classList.add('primary'); T = null; }
   voices.clear();
@@ -964,7 +977,7 @@ drawChords(); updateArt(); drawStrum(); buildStrumPats(); drawPower(); buildPowe
 drawProg(); buildProgList();
 
 /* ==================== ARRANGER: SONG TRACK (DOM) ==================== */
-const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false, loopA:null, loopB:null };
+const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false, loopA:null, loopB:null, metro:false };
 const arLane = $('ar-lane'), arRuler = $('ar-ruler'), arHead = $('ar-playhead'), arScroll = $('ar-scroll');
 function arMsg(t){ $('ar-msg').textContent = t||''; }
 // playback holds a snapshot of the notes, so any change to the block set must stop it
@@ -1094,6 +1107,7 @@ function arToggle(force){
 }
 $('ar-title').onclick=()=>arToggle();
 $('ar-loop').onclick=e=>{ AR.loop=!AR.loop; e.target.setAttribute('aria-pressed',AR.loop); arSave(); };
+$('ar-metro').onclick=e=>{ AR.metro=!AR.metro; e.target.setAttribute('aria-pressed',AR.metro); arSave(); };
 /* drag across the ruler to set a loop range (auto-enables Loop); click clears it */
 $('ar-ruler').onpointerdown=(e)=>{ e.preventDefault(); arStopIfPlaying();
   const r=$('ar-ruler'), px=AR.pxPerBeat;
@@ -1145,6 +1159,23 @@ function arPlay(){
   });
   $('arranger').classList.add('playing');
   arSweep(t0, A, period, spb, AR.loop);
+  arMetro(t0, A, period, spb, AR.loop);
+}
+/* metronome: one click per beat within the play window, accented on each bar's downbeat,
+   scheduled a beat or two ahead against the same t0 so it stays in step with the song */
+function arMetro(t0, A, period, spb, doLoop){
+  if(!AR.metro || !T) return;
+  let rel=0;                                              // beats since the window start
+  const tick=()=>{
+    if(!T || T.btn!==$('ar-play')) return;                // stopAll clears the interval
+    while(t0 + rel*spb < ctx.currentTime + 0.3){
+      if(!doLoop && rel>=period) return;                  // one pass only when not looping
+      const at=t0+rel*spb;
+      if(at >= ctx.currentTime-0.02){ const bar=(A+(rel%period))%BEATS_PER_BAR===0; click(at, bar); }
+      rel+=1;
+    }
+  };
+  T.metroTimer=setInterval(tick,25); tick();
 }
 function arSweep(t0, A, period, spb, doLoop){
   const px=AR.pxPerBeat;
@@ -1179,17 +1210,18 @@ function arSave(){
   try{ localStorage.setItem('gcp-arranger', JSON.stringify({
     blocks:AR.blocks.map(b=>({source:b.source,root:b.root,quality:b.quality,art:b.art,palmMute:!!b.palmMute,three:!!b.three,
       drive:!!b.drive,patternId:b.patternId,chords:b.chords,name:b.name,startBeat:b.startBeat,lenBeats:b.lenBeats})),
-    bpm:AR.bpm, program:AR.program, h:AR.h, loop:AR.loop, loopA:AR.loopA, loopB:AR.loopB })); }catch(e){}
+    bpm:AR.bpm, program:AR.program, h:AR.h, loop:AR.loop, loopA:AR.loopA, loopB:AR.loopB, metro:AR.metro })); }catch(e){}
 }
 function arLoad(){
   try{ const s=JSON.parse(localStorage.getItem('gcp-arranger')); if(!s) return;
     AR.bpm=Math.max(40, Math.min(300, +s.bpm||120)); AR.program=s.program==null?25:s.program;
-    AR.h=s.h||190; AR.loop=!!s.loop;
+    AR.h=s.h||190; AR.loop=!!s.loop; AR.metro=!!s.metro;
     AR.loopA=(s.loopA!=null && s.loopB>s.loopA)?s.loopA:null; AR.loopB=AR.loopA==null?null:s.loopB;
     AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
       .filter(b=>{ try{ blockLoopStrokes(b); return b.lenBeats>=1 && blockLoopBeats(b)>0; }catch(e){ return false; } });
     $('ar-bpm').value=AR.bpm; $('ar-bpmv').textContent=AR.bpm;
     $('ar-loop').setAttribute('aria-pressed', AR.loop);
+    $('ar-metro').setAttribute('aria-pressed', AR.metro);
   }catch(e){ AR.blocks=[]; }
 }
 arLoad(); if(AR.blocks.length) arToggle(true); else arRender();
