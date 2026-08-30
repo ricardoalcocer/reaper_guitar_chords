@@ -116,7 +116,8 @@
                box-shadow:0 0 6px rgba(255,255,255,.5);display:none;pointer-events:none;z-index:6}
   #arranger.playing #ar-playhead{display:block}
   .ar-block{position:absolute;top:8px;bottom:8px;border-radius:5px;cursor:grab;user-select:none;
-            overflow:hidden;box-sizing:border-box;border:1px solid #3E6DA8;background:var(--amber-dim,#213650)}
+            overflow:hidden;box-sizing:border-box;border:1px solid #3E6DA8;background:var(--amber-dim,#213650);
+            touch-action:none}   /* claim touch for drag instead of scrolling the timeline */
   .ar-block.pow{border-color:#8a6a2e;background:#382c18}
   .ar-block.prog{border-color:#4f8a5e;background:#1f3326}
   .ar-block.now{outline:2px solid var(--amber);outline-offset:-2px;z-index:4}
@@ -127,9 +128,10 @@
   .ar-block.pow .ar-lbl{color:#f0d9a8} .ar-block.prog .ar-lbl{color:#c7e8cf}
   .ar-sub{position:absolute;left:9px;bottom:7px;font:500 10px var(--mono);color:#8fa9c8;pointer-events:none}
   .ar-block.pow .ar-sub{color:#b79b6b} .ar-block.prog .ar-sub{color:#82ab8e}
-  .ar-rm{position:absolute;top:2px;right:5px;font:700 14px/1 system-ui;color:#fff;opacity:.45;cursor:pointer}
+  .ar-rm{position:absolute;top:0;right:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+         font:700 16px/1 system-ui;color:#fff;opacity:.55;cursor:pointer;touch-action:none}   /* bigger tap target */
   .ar-rm:hover{opacity:1}
-  .ar-grip{position:absolute;top:0;bottom:0;width:10px;right:0;cursor:ew-resize}
+  .ar-grip{position:absolute;top:26px;bottom:0;width:20px;right:0;cursor:ew-resize;touch-action:none}   /* wider for touch; below the × */
   .ar-grip:hover{background:rgba(255,255,255,.16)}
 </style>
 
@@ -1177,15 +1179,34 @@ function arMetro(t0, A, period, spb, doLoop){
   };
   T.metroTimer=setInterval(tick,25); tick();
 }
+/* the chord under the playhead, so the fretboard can follow along while the song plays */
+function arCurrentFrets(tb){
+  for(const b of AR.blocks){
+    if(tb>=b.startBeat && tb<b.startBeat+b.lenBeats){
+      if(b.source==='power') return powerChord(b.root, b.three);
+      if(b.source==='prog'){ const bar=Math.floor((tb-b.startBeat)/BEATS_PER_BAR)%b.chords.length, c=b.chords[bar];
+        return CHORDS[c.root][c.quality].frets; }
+      return CHORDS[b.root][b.quality].frets;
+    }
+  }
+  return null;
+}
+const AR_BOARD={chords:['c-board','cb'],strum:['s-board','sb'],power:['p-board','pb'],prog:['pg-board','pgb']};
+function arShowChord(frets){ const v=document.querySelector('.tab[aria-selected=true]').dataset.view, m=AR_BOARD[v];
+  if(m) $(m[0]).innerHTML=board(frets, m[1]); }
+function arRestoreBoard(){ const v=document.querySelector('.tab[aria-selected=true]').dataset.view;
+  ({chords:drawChords, strum:drawStrum, power:drawPower, prog:drawProg}[v]||(()=>{}))(); }
 function arSweep(t0, A, period, spb, doLoop){
-  const px=AR.pxPerBeat;
+  const px=AR.pxPerBeat; let lastKey='';
   const step=()=>{
-    if(!T || T.btn!==$('ar-play')){ $('arranger').classList.remove('playing'); arMsg(''); return; }
+    if(!T || T.btn!==$('ar-play')){ $('arranger').classList.remove('playing'); arMsg(''); arRestoreBoard(); return; }
     let rel=(ctx.currentTime-t0)/spb; if(rel<0) rel=0;
     if(doLoop && period>0) rel%=period;
     const x=(A+rel)*px; arHead.style.left=x+'px';
     if(x < arScroll.scrollLeft+20 || x > arScroll.scrollLeft+arScroll.clientWidth-40)
       arScroll.scrollLeft = Math.max(0, x - arScroll.clientWidth*0.4);
+    const frets=arCurrentFrets(A+rel), key=frets?frets.join(','):'';   // update the fretboard when the chord changes
+    if(key!==lastKey){ lastKey=key; if(frets) arShowChord(frets); }
     requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
