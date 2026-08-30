@@ -96,7 +96,10 @@
   #arranger.open #ar-scroll{display:block}
   #ar-content{position:relative;min-width:100%;height:calc(var(--ar-h,190px) - 62px)}
   #ar-ruler{position:relative;height:20px;border-bottom:1px solid var(--line);
-            background:#212429;font:10px var(--mono);color:var(--mute)}
+            background:#212429;font:10px var(--mono);color:var(--mute);cursor:text;touch-action:none;z-index:2}
+  #ar-loopband{position:absolute;top:0;bottom:0;z-index:1;pointer-events:none;
+               background:rgba(228,162,60,.12);border-left:2px solid var(--amber);border-right:2px solid var(--amber)}
+  #ar-loopband::before{content:"loop";position:absolute;top:2px;left:4px;font:700 9px var(--mono);color:var(--amber);letter-spacing:.1em}
   .ar-bar-num{position:absolute;top:4px;transform:translateX(4px);pointer-events:none;font-weight:700;color:var(--ink)}
   .ar-bar-line{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
   .ar-beat-line{position:absolute;top:11px;bottom:0;width:1px;background:var(--line);opacity:.4}
@@ -257,7 +260,8 @@
   </div>
   <div id="ar-scroll">
     <div id="ar-content">
-      <div id="ar-ruler"></div>
+      <div id="ar-loopband" hidden></div>
+      <div id="ar-ruler" title="Drag here to set a loop range; click to clear"></div>
       <div id="ar-lane">
         <div id="ar-playhead"></div>
         <div id="ar-empty">Audition a strum, power riff, or progression, then press &ldquo;+ Song&rdquo; to stack it here as a loop.</div>
@@ -905,7 +909,7 @@ drawChords(); updateArt(); drawStrum(); buildStrumPats(); drawPower(); buildPowe
 drawProg(); buildProgList();
 
 /* ==================== ARRANGER: SONG TRACK (DOM) ==================== */
-const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false };
+const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false, loopA:null, loopB:null };
 const arLane = $('ar-lane'), arRuler = $('ar-ruler'), arHead = $('ar-playhead'), arScroll = $('ar-scroll');
 function arMsg(t){ $('ar-msg').textContent = t||''; }
 // playback holds a snapshot of the notes, so any change to the block set must stop it
@@ -940,6 +944,10 @@ function arRender(){
     if(i%BEATS_PER_BAR===0 && i<spanBeats){ const num=document.createElement('div');
       num.className='ar-bar-num'; num.style.left=(i*px)+'px'; num.textContent=(i/BEATS_PER_BAR+1); arRuler.append(num); }
   }
+  // loop region band
+  const lb=$('ar-loopband');
+  if(AR.loopA!=null && AR.loopB>AR.loopA){ lb.hidden=false; lb.style.left=(AR.loopA*px)+'px'; lb.style.width=((AR.loopB-AR.loopA)*px)+'px'; }
+  else lb.hidden=true;
   // blocks
   [...arLane.querySelectorAll('.ar-block')].forEach(e=>e.remove());
   AR.blocks.forEach((b,idx)=>{
@@ -983,7 +991,7 @@ function arWireBlock(el,b){
     AR.blocks=AR.blocks.filter(x=>x!==b); arRender(); arSave(); arMsg('Removed a block.'); };
   const grip=el.querySelector('.ar-grip');
   grip.onpointerdown=(e)=>{ e.stopPropagation(); e.preventDefault(); arStopIfPlaying();
-    const x0=e.clientX, len0=b.lenBeats; grip.setPointerCapture(e.pointerId);
+    const x0=e.clientX, len0=b.lenBeats; try{ grip.setPointerCapture(e.pointerId); }catch(_){}
     const mv=(ev)=>{ b.lenBeats=Math.max(1, len0+Math.round((ev.clientX-x0)/px()));
                      el.style.width=Math.max(20,(b.lenBeats*px()-2))+'px';
                      el.querySelector('.ar-sub').textContent=fmtLen(b.lenBeats)+artTag(b)+loopTag(b); };
@@ -993,7 +1001,7 @@ function arWireBlock(el,b){
   };
   el.onpointerdown=(e)=>{
     if(e.target.classList.contains('ar-grip')||e.target.classList.contains('ar-rm')) return;
-    e.preventDefault(); arStopIfPlaying(); el.classList.add('drag'); el.setPointerCapture(e.pointerId);
+    e.preventDefault(); arStopIfPlaying(); el.classList.add("drag"); try{ el.setPointerCapture(e.pointerId); }catch(_){}
     const x0=e.clientX, beat0=b.startBeat;
     const mv=(ev)=>{ b.startBeat=Math.max(0, beat0+Math.round((ev.clientX-x0)/px())); el.style.left=(b.startBeat*px())+'px'; };
     const up=()=>{ el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up);
@@ -1009,7 +1017,7 @@ function arReflow(){
 }
 /* resize the whole song track vertically */
 $('ar-resize').onpointerdown=(e)=>{ e.preventDefault(); const y0=e.clientY, h0=AR.h;
-  const r=$('ar-resize'); r.setPointerCapture(e.pointerId);
+  const r=$("ar-resize"); try{ r.setPointerCapture(e.pointerId); }catch(_){}
   const mv=(ev)=>{ AR.h=Math.min(460, Math.max(130, h0+(y0-ev.clientY)));
                    document.documentElement.style.setProperty('--ar-h', AR.h+'px'); arFit(); };
   const up=()=>{ r.removeEventListener('pointermove',mv); r.removeEventListener('pointerup',up);
@@ -1025,46 +1033,65 @@ function arToggle(force){
 }
 $('ar-title').onclick=()=>arToggle();
 $('ar-loop').onclick=e=>{ AR.loop=!AR.loop; e.target.setAttribute('aria-pressed',AR.loop); arSave(); };
-$('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; arStopIfPlaying(); AR.blocks=[]; arRender(); arSave(); arMsg('Cleared.'); };
+/* drag across the ruler to set a loop range (auto-enables Loop); click clears it */
+$('ar-ruler').onpointerdown=(e)=>{ e.preventDefault(); arStopIfPlaying();
+  const r=$('ar-ruler'), px=AR.pxPerBeat;
+  const beatAt=(x)=>Math.max(0, Math.round((x-r.getBoundingClientRect().left)/px));
+  const a0=beatAt(e.clientX); let moved=false; try{ r.setPointerCapture(e.pointerId); }catch(_){}
+  const mv=(ev)=>{ const b=beatAt(ev.clientX);
+    if(b===a0){ AR.loopA=AR.loopB=null; } else { AR.loopA=Math.min(a0,b); AR.loopB=Math.max(a0,b); moved=true; }
+    arRender(); };
+  const up=()=>{ r.removeEventListener('pointermove',mv); r.removeEventListener('pointerup',up); r.removeEventListener('pointercancel',up);
+    if(!moved || AR.loopA==null || AR.loopB<=AR.loopA){ AR.loopA=AR.loopB=null; arRender(); arMsg('Loop range cleared.'); }
+    else { AR.loop=true; $('ar-loop').setAttribute('aria-pressed',true);
+           arMsg(`Loop set: bars ${AR.loopA/BEATS_PER_BAR+1}–${AR.loopB/BEATS_PER_BAR+1} (${fmtLen(AR.loopB-AR.loopA)}).`); }
+    arSave(); };
+  r.addEventListener('pointermove',mv); r.addEventListener('pointerup',up); r.addEventListener('pointercancel',up);
+};
+$('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; arStopIfPlaying(); AR.blocks=[]; AR.loopA=AR.loopB=null; arRender(); arSave(); arMsg('Cleared.'); };
 
-/* play the whole song through the existing transport; a playhead sweeps the bars */
+/* play the song (or just the loop range) through the transport; a playhead sweeps the window */
 function arPlay(){
   if(T){ stopAll(); return; }
   if(!AR.blocks.length){ arMsg('The song is empty — add a loop first.'); return; }
-  const spb=60/AR.bpm, songBeats=arEndBeat(), notes=[];
-  AR.blocks.forEach((b,idx)=>{
-    const base=b.startBeat;
-    blockNoteEvents(b, AR.bpm).forEach(e=> notes.push({
+  const spb=60/AR.bpm, songBeats=arEndBeat();
+  const region = AR.loopA!=null && AR.loopB>AR.loopA;      // a chosen loop range
+  const A = (AR.loop && region) ? AR.loopA : 0;            // play window [A,B); region only applies when looping
+  const B = (AR.loop && region) ? AR.loopB : songBeats;
+  const period = B - A;
+  const all=[];
+  AR.blocks.forEach((b,idx)=>{ const base=b.startBeat;
+    blockNoteEvents(b, AR.bpm).forEach(e=> all.push({
       startBeat:base+e.startBeat, endBeat:base+e.endBeat,
       midi:e.midi, vel:e.vel, art:e.art, si:e.si, drive:!!(b.source==='power'&&b.drive), idx })); });
-  notes.sort((a,b)=>a.startBeat-b.startBeat);
-  if(!notes.length){ arMsg('Nothing to play.'); return; }
+  const notes = all.filter(n=> n.startBeat>=A-1e-9 && n.startBeat<B-1e-9).sort((a,b)=>a.startBeat-b.startBeat);
+  if(!notes.length){ arMsg(AR.loop&&region?'The loop range is empty.':'Nothing to play.'); return; }
   const cells=AR.blocks.map(b=>b.el), total=notes.length;
-  arMsg(AR.loop?'Playing (looping)…':'Playing…');
-  const t0 = (audio(), ctx.currentTime + .12);            // matches start()'s look-ahead
+  arMsg(AR.loop ? (region?`Looping bars ${A/BEATS_PER_BAR+1}–${B/BEATS_PER_BAR+1}…`:'Playing (looping)…') : 'Playing…');
+  const t0 = (audio(), ctx.currentTime + .12);
   start($('ar-play'), cells, (i,when)=>{
     if(!AR.loop && i>=total){
-      if(T && !T.stopTimer){ const songEnd=t0+songBeats*spb;   // stop once, ~after the last note rings
-        T.stopTimer=setTimeout(()=>{ if(T&&T.btn===$('ar-play')) stopAll(); }, Math.max(0,(songEnd-ctx.currentTime))*1000+500); }
+      if(T && !T.stopTimer){ const end=t0+period*spb;
+        T.stopTimer=setTimeout(()=>{ if(T&&T.btn===$('ar-play')) stopAll(); }, Math.max(0,(end-ctx.currentTime))*1000+500); }
       return {slot:-1, dur:1};
     }
-    const k=i%total, pass=Math.floor(i/total), n=notes[k];
-    const at=t0+(n.startBeat+pass*songBeats)*spb;         // absolute beat time — matches export + the playhead
+    const k=i%total, pass=Math.floor(i/total), n=notes[k], rel=n.startBeat-A;
+    const at=t0+(rel+pass*period)*spb;                    // absolute time within the window — matches the playhead
     play(n.midi, at, n.vel, n.art, n.drive, n.si, at+Math.max(0.02,(n.endBeat-n.startBeat)*spb));
     const gap = (k+1<total) ? notes[k+1].startBeat-n.startBeat
-                            : (songBeats-n.startBeat)+(AR.loop?notes[0].startBeat:0.25);
+                            : (period-rel)+(AR.loop?(notes[0].startBeat-A):0.25);
     return {slot:n.idx, dur:Math.max(0.005, gap*spb)};
   });
-  $('arranger').classList.add('playing');   // after start() (which calls stopAll and clears it)
-  arSweep(t0, songBeats, spb);
+  $('arranger').classList.add('playing');
+  arSweep(t0, A, period, spb, AR.loop);
 }
-function arSweep(t0, songBeats, spb){
-  const px=AR.pxPerBeat;                                   // px per beat
+function arSweep(t0, A, period, spb, doLoop){
+  const px=AR.pxPerBeat;
   const step=()=>{
     if(!T || T.btn!==$('ar-play')){ $('arranger').classList.remove('playing'); arMsg(''); return; }
-    let beat=(ctx.currentTime-t0)/spb; if(beat<0) beat=0;
-    if(AR.loop && songBeats>0) beat%=songBeats;
-    const x=beat*px; arHead.style.left=x+'px';
+    let rel=(ctx.currentTime-t0)/spb; if(rel<0) rel=0;
+    if(doLoop && period>0) rel%=period;
+    const x=(A+rel)*px; arHead.style.left=x+'px';
     if(x < arScroll.scrollLeft+20 || x > arScroll.scrollLeft+arScroll.clientWidth-40)
       arScroll.scrollLeft = Math.max(0, x - arScroll.clientWidth*0.4);
     requestAnimationFrame(step);
@@ -1091,12 +1118,13 @@ function arSave(){
   try{ localStorage.setItem('gcp-arranger', JSON.stringify({
     blocks:AR.blocks.map(b=>({source:b.source,root:b.root,quality:b.quality,art:b.art,palmMute:!!b.palmMute,three:!!b.three,
       drive:!!b.drive,patternId:b.patternId,chords:b.chords,name:b.name,startBeat:b.startBeat,lenBeats:b.lenBeats})),
-    bpm:AR.bpm, program:AR.program, h:AR.h, loop:AR.loop })); }catch(e){}
+    bpm:AR.bpm, program:AR.program, h:AR.h, loop:AR.loop, loopA:AR.loopA, loopB:AR.loopB })); }catch(e){}
 }
 function arLoad(){
   try{ const s=JSON.parse(localStorage.getItem('gcp-arranger')); if(!s) return;
     AR.bpm=Math.max(40, Math.min(300, +s.bpm||120)); AR.program=s.program==null?25:s.program;
     AR.h=s.h||190; AR.loop=!!s.loop;
+    AR.loopA=(s.loopA!=null && s.loopB>s.loopA)?s.loopA:null; AR.loopB=AR.loopA==null?null:s.loopB;
     AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
       .filter(b=>{ try{ blockLoopStrokes(b); return b.lenBeats>=1 && blockLoopBeats(b)>0; }catch(e){ return false; } });
     $('ar-bpm').value=AR.bpm; $('ar-bpmv').textContent=AR.bpm;
