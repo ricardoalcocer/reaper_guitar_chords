@@ -127,7 +127,7 @@
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+705cc84</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+c7d765b</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
@@ -154,16 +154,14 @@
       </div>
     </div>
     <div class="panel">
-      <p class="eyebrow">Root</p><div class="chips" id="c-roots"></div>
-      <p class="eyebrow" style="margin-top:14px">Quality</p><div class="chips" id="c-quals"></div>
-    </div>
-    <div class="panel">
       <p class="eyebrow">Key</p>
       <div class="chips" id="c-keys"></div>
       <div class="row" style="margin-top:10px">
-        <button class="btn toggle" id="c-mode" aria-pressed="false">major</button>
-        <button class="btn toggle" id="c-sev" aria-pressed="false">triads</button>
+        <button class="btn toggle" id="c-major" aria-pressed="true">Major</button>
+        <button class="btn toggle" id="c-minor" aria-pressed="false">Minor</button>
       </div>
+      <p class="eyebrow" style="margin-top:14px">Quality &mdash; applied across the key</p>
+      <div class="chips" id="c-quals"></div>
       <p class="eyebrow" style="margin-top:14px">Chords in this key</p>
       <div class="chips" id="c-diatonic"></div>
     </div>
@@ -229,7 +227,8 @@
       <p class="eyebrow">Start on</p>
       <div class="chips" id="pg-keys"></div>
       <div class="row" style="margin-top:10px">
-        <button class="btn toggle" id="pg-mode" aria-pressed="false">major</button>
+        <button class="btn toggle" id="pg-major" aria-pressed="true">Major</button>
+        <button class="btn toggle" id="pg-minor" aria-pressed="false">Minor</button>
       </div>
       <p class="eyebrow" style="margin-top:14px">Style</p><div class="chips" id="pg-moods"></div>
       <p class="eyebrow" style="margin-top:14px">Pattern</p><div class="chips" id="pg-pats"></div>
@@ -664,8 +663,22 @@ function start(btn, cells, getStep, onStep){
 }
 
 /* ---------- chords tab ---------- */
-let cRoot='A', cQual='m7', cPM=false, keyPC=0, keyMode='maj', sevenths=false;
+let cRoot='C', cQual='maj', cPM=false, keyPC=0, keyMode='maj', qMode='dia';   // default: C major, Diatonic
 const $ = id => document.getElementById(id);
+// The 7 chords of the current key. qMode 'dia'/'dia7' = the natural diatonic qualities; ANY other
+// quality (e.g. 'm7') is applied to every degree — the roman numerals, all in that quality.
+function keyDegrees(){
+  const degs = keyMode==='maj'?DIA_MAJ:DIA_MIN;
+  const nat = keyMode==='maj'
+    ? (qMode==='dia7'?['maj7','m7','m7','maj7','7','m7','m7b5']:['maj','m','m','maj','maj','m','dim'])
+    : (qMode==='dia7'?['m7','m7b5','maj7','m7','7','maj7','7']:['m','dim','maj','m','maj','maj','maj']);
+  return degs.map((d,i)=>{
+    const pc=(keyPC+d)%12, q=(qMode==='dia'||qMode==='dia7')?nat[i]:qMode;
+    return {pc, quality:q, numeral:analyze(keyPC,keyMode,pc,q).numeral, root:NAMES[pc]};
+  });
+}
+// keep the auditioned chord on the tonic degree of the current key + quality
+function selectTonic(){ const dc=keyDegrees()[0]; cRoot=NAMES[dc.pc]; cQual=dc.quality; }
 function drawChords(){
   const d = CHORDS[cRoot][cQual];
   $('c-name').textContent = d.label; $('c-dia').textContent = d.dia;
@@ -675,17 +688,17 @@ function drawChords(){
   $('c-func').innerHTML = `${a.func} <span>— ${a.note}, in ${NAMES[keyPC]} ${keyMode==='maj'?'major':'minor'}</span>`;
   drawDiatonic();
   $('c-board').innerHTML = board(d.frets,'cb');
-  [...$('c-roots').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===cRoot));
-  [...$('c-quals').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===cQual));
+  [...$('c-quals').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===qMode));
 }
-ROOTS.forEach(r=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=r;
-  b.textContent=r; b.onclick=()=>{cRoot=r;drawChords();strumC('D');}; $('c-roots').append(b); });
-QUALS.forEach(([q,l])=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=q;
-  b.textContent=l; b.onclick=()=>{cQual=q;drawChords();strumC('D');}; $('c-quals').append(b); });
+const QMODES = [['dia','Diatonic'],['dia7','Diatonic 7ths'],['maj','maj'],['m','m'],['7','7'],['m7','m7'],
+  ['maj7','maj7'],['m7b5','m7b5'],['dim7','dim7'],['dim','dim'],['aug','aug'],['sus2','sus2'],
+  ['sus4','sus4'],['7sus4','7sus4'],['6','6'],['m6','m6'],['9','9'],['add9','add9']];
+QMODES.forEach(([v,l])=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=v;
+  b.textContent=l; b.onclick=()=>{ qMode=v; selectTonic(); drawChords(); strumC('D'); }; $('c-quals').append(b); });
 function drawDiatonic(){
   const host = $('c-diatonic'); if(!host) return;
   host.innerHTML='';
-  diatonicChords(keyPC, keyMode, sevenths).forEach(dc=>{
+  keyDegrees().forEach(dc=>{
     const b=document.createElement('button'); b.className='dchip';
     b.setAttribute('aria-pressed', NAMES.indexOf(cRoot)===dc.pc && cQual===dc.quality);
     b.innerHTML=`<b>${dc.numeral}</b><span>${dc.root}${dc.quality==='maj'?'':dc.quality}</span>`;
@@ -705,12 +718,12 @@ function strumC(kind){
   } else stroke(f, cPM?'P':kind, ctx.currentTime+.05, spb, false, lighter('cb'));
 }
 ROOTS.forEach(r=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=r;
-  b.textContent=r; b.onclick=()=>{keyPC=NAMES.indexOf(r);drawChords();}; $('c-keys').append(b); });
-$('c-mode').onclick=e=>{ keyMode = keyMode==='maj'?'min':'maj';
-  e.target.textContent = keyMode==='maj'?'major':'minor';
-  e.target.setAttribute('aria-pressed', keyMode==='min'); drawChords(); };
-$('c-sev').onclick=e=>{ sevenths=!sevenths; e.target.textContent = sevenths?'7ths':'triads';
-  e.target.setAttribute('aria-pressed', sevenths); drawDiatonic(); };
+  b.textContent=r; b.onclick=()=>{keyPC=NAMES.indexOf(r);selectTonic();drawChords();strumC('D');}; $('c-keys').append(b); });
+function setKeyMode(m){ keyMode=m;
+  $('c-major').setAttribute('aria-pressed', m==='maj'); $('c-minor').setAttribute('aria-pressed', m==='min');
+  selectTonic(); drawChords(); strumC('D'); }
+$('c-major').onclick=()=>setKeyMode('maj');
+$('c-minor').onclick=()=>setKeyMode('min');
 $('c-down').onclick=()=>strumC('D'); $('c-up').onclick=()=>strumC('U');
 $('c-arp').onclick=()=>strumC('arp');
 $('c-pm').onclick=e=>{cPM=!cPM;e.target.setAttribute('aria-pressed',cPM);strumC('D');};
@@ -860,9 +873,11 @@ PROGS.moods.forEach(m=>{ const b=document.createElement('button'); b.className='
   $('pg-moods').append(b); });
 Object.keys(STRUM_PATS).forEach(name=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=name;
   b.textContent=name; b.onclick=()=>{pgPat=name;drawProg();if(T)playProg(true);}; $('pg-pats').append(b); });
-$('pg-mode').onclick=e=>{ pgMode=pgMode==='maj'?'min':'maj';
-  e.target.textContent=pgMode==='maj'?'major':'minor';
-  e.target.setAttribute('aria-pressed',pgMode==='min'); drawProg(); };
+function setProgMode(m){ pgMode=m;
+  $('pg-major').setAttribute('aria-pressed', m==='maj'); $('pg-minor').setAttribute('aria-pressed', m==='min');
+  drawProg(); if(T) playProg(true); }
+$('pg-major').onclick=()=>setProgMode('maj');
+$('pg-minor').onclick=()=>setProgMode('min');
 $('pg-play').onclick=()=>playProg();
 $('pg-bpm').oninput=e=>{ $('pg-bpmv').textContent=e.target.value; if(T) playProg(true); };
 
