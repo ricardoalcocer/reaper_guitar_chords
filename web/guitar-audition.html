@@ -10,7 +10,7 @@
   body{margin:0;background:var(--bg);color:var(--ink);
        font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:18px 18px 64px}
   body.ar-open{padding-bottom:calc(var(--ar-h,190px) + 18px)}
-  .wrap{max-width:760px;margin:0 auto}
+  .wrap{max-width:1500px;margin:0 auto}   /* fill the screen (like the arranger); capped on very wide desktops */
   h1{font:600 15px/1 system-ui;letter-spacing:.02em;margin:0}
   .sub{color:var(--mute);font-size:12px;margin:4px 0 16px}
   .eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);
@@ -134,7 +134,7 @@
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+1f23ceb</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+2919c17</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
@@ -388,14 +388,32 @@ function audio(){
   if(ctx.state==='suspended') ctx.resume();
   return ctx;
 }
+/* iOS also plays Web Audio through a category the mute switch can silence; playing a silent,
+   looping <audio> element on a gesture flips the session to "playback" so synth output is heard. */
+let _silentTag;
+function iosUnmute(){
+  if(_silentTag){ try{ _silentTag.play(); }catch(e){} return; }
+  try{
+    const sr=8000, n=Math.floor(sr*0.25), buf=new Uint8Array(44+n), dv=new DataView(buf.buffer);
+    const w=(o,s)=>{ for(let i=0;i<s.length;i++) buf[o+i]=s.charCodeAt(i); };
+    w(0,'RIFF'); dv.setUint32(4,36+n,true); w(8,'WAVE'); w(12,'fmt ');
+    dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
+    dv.setUint32(24,sr,true); dv.setUint32(28,sr,true); dv.setUint16(32,1,true); dv.setUint16(34,8,true);
+    w(36,'data'); dv.setUint32(40,n,true); buf.fill(128,44);   // 8-bit silence
+    _silentTag=new Audio(URL.createObjectURL(new Blob([buf],{type:'audio/wav'})));
+    _silentTag.loop=true; _silentTag.setAttribute('playsinline','');
+    _silentTag.play().catch(()=>{});
+  }catch(e){}
+}
 /* iOS/Safari (incl. Vivaldi on iPad) locks Web Audio until a real touch: on the first gesture,
-   resume the context and play a one-sample silent buffer to unlock it; resume on later gestures too. */
+   resume the context, play a one-sample silent buffer, and flip the audio session to playback. */
 function unlockAudio(){
   audio();
   if(ctx.state==='suspended') ctx.resume();
   if(!ctx._unlocked){
     try{ const b=ctx.createBuffer(1,1,ctx.sampleRate), s=ctx.createBufferSource();
          s.buffer=b; s.connect(ctx.destination); s.start(0); }catch(e){}
+    iosUnmute();
     ctx._unlocked=true;
   }
 }
