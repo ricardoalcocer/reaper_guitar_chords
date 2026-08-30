@@ -134,7 +134,7 @@
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+28d9807</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+e1a3984</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
@@ -157,6 +157,7 @@
         <button class="btn toggle" id="c-up" aria-pressed="false">Strum up</button>
         <button class="btn toggle" id="c-arp" aria-pressed="false">Arpeggio</button>
         <button class="btn toggle" id="c-pm" aria-pressed="false">Palm mute</button>
+        <button class="btn toggle" id="c-cut" aria-pressed="false" title="When on, a new chord silences the previous one">Cut off</button>
         <button class="btn" id="c-add" title="Add this chord to the arranger">+ Song</button>
       </div>
     </div>
@@ -368,7 +369,7 @@ function diatonicChords(keyPC, mode, sevenths){
 }
 
 /* ---------- audio: Karplus-Strong plucked string ---------- */
-let ctx, master, dry, driveBus, cache = new Map(), voices = new Map();
+let ctx, master, dry, driveBus, cache = new Map(), voices = new Map(), live = new Set();
 function audio(){
   if(ctx) return ctx;
   ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -422,6 +423,7 @@ function play(midi, when, vel, kind, drive, voice, stopAt){
   const bright = ghost ? .9 : long ? .45 : .62;
   const src = ctx.createBufferSource(); src.buffer = buffer(midi, dur, damp, bright);
   const g = ctx.createGain(); g.gain.value = (vel/127) * (ghost? .5 : .9);
+  const node = {g, src}; live.add(node);               // track every ringing note (for cut-off)
   src.connect(g); g.connect(drive ? driveBus : dry);
   src.start(Math.max(when, ctx.currentTime));
   if(stopAt!==undefined){                              // arranger: cut the note at the block's end
@@ -429,8 +431,14 @@ function play(midi, when, vel, kind, drive, voice, stopAt){
     try{ g.gain.setValueAtTime(g.gain.value, Math.max(off-.03, ctx.currentTime));
          g.gain.linearRampToValueAtTime(0, off); src.stop(off+.02); }catch(e){}
   }
-  if(voice!==undefined){ voices.set(voice, {g, src});
-    src.onended = ()=>{ if(voices.get(voice) && voices.get(voice).src===src) voices.delete(voice); }; }
+  src.onended = ()=>{ live.delete(node); if(voice!==undefined && voices.get(voice)===node) voices.delete(voice); };
+  if(voice!==undefined) voices.set(voice, node);
+}
+/* silence every ringing note now — used when a new chord should cut off the previous one */
+function hush(){
+  const t = ctx ? ctx.currentTime : 0;
+  live.forEach(({g,src})=>{ try{ g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t);
+    g.gain.linearRampToValueAtTime(0, t+.04); src.stop(t+.06); }catch(e){} });
 }
 /* stroke shapes, in beats — identical spreads to the MIDI files */
 const SPREAD = {D:14/480, U:9/480, P:4/480, x:10/480, A:0.25};   // A = arpeggio: a 1/16 note between strings
@@ -677,7 +685,7 @@ function start(btn, cells, getStep, onStep){
 }
 
 /* ---------- chords tab ---------- */
-let cRoot='C', cQual='maj', cPM=false, cArt='D', keyPC=0, keyMode='maj', qMode='dia';   // cArt: the chosen strum (D/U/arp)
+let cRoot='C', cQual='maj', cPM=false, cArt='D', cCut=false, keyPC=0, keyMode='maj', qMode='dia';   // cCut: new chord silences the last
 const $ = id => document.getElementById(id);
 // The 7 chords of the current key. qMode 'dia'/'dia7' = the natural diatonic qualities; ANY other
 // quality (e.g. 'm7') is applied to every degree — the roman numerals, all in that quality.
@@ -723,6 +731,7 @@ function drawDiatonic(){
 }
 function strumC(kind){
   stopAll(); audio(); if(ctx.state==='suspended') ctx.resume();
+  if(cCut) hush();                                        // cut off the previous chord if the setting is on
   const f = CHORDS[cRoot][cQual].frets, spb = .6;
   // route every articulation through stroke() so what you hear == what a chord block replays
   const k = kind==='arp' ? 'A' : (cPM ? 'P' : kind);
@@ -741,6 +750,7 @@ function setArt(a){ cArt=a; updateArt(); strumC(a); }
 $('c-down').onclick=()=>setArt('D'); $('c-up').onclick=()=>setArt('U');
 $('c-arp').onclick=()=>setArt('arp');
 $('c-pm').onclick=e=>{cPM=!cPM;e.target.setAttribute('aria-pressed',cPM);strumC(cArt);};
+$('c-cut').onclick=e=>{cCut=!cCut;e.target.setAttribute('aria-pressed',cCut); if(cCut) hush();};
 
 /* ---------- strumming tab ---------- */
 let sRoot='A', sQual='m', sPat='classic', sCells=[];    // any chord, not a fixed shortlist
