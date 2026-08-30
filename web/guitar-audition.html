@@ -97,10 +97,12 @@
   #ar-content{position:relative;min-width:100%;height:calc(var(--ar-h,190px) - 62px)}
   #ar-ruler{position:relative;height:20px;border-bottom:1px solid var(--line);
             background:#212429;font:10px var(--mono);color:var(--mute)}
-  .ar-bar-num{position:absolute;top:4px;transform:translateX(4px);pointer-events:none}
+  .ar-bar-num{position:absolute;top:4px;transform:translateX(4px);pointer-events:none;font-weight:700;color:var(--ink)}
   .ar-bar-line{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+  .ar-beat-line{position:absolute;top:11px;bottom:0;width:1px;background:var(--line);opacity:.4}
   #ar-lane{position:absolute;left:0;right:0;top:20px;bottom:0;
-           background:repeating-linear-gradient(90deg,rgba(255,255,255,.05),rgba(255,255,255,.05) 1px,transparent 1px,transparent var(--ar-bar,90px))}
+           background:repeating-linear-gradient(90deg,rgba(255,255,255,.09),rgba(255,255,255,.09) 1px,transparent 1px,transparent var(--ar-bar,104px)),
+                      repeating-linear-gradient(90deg,rgba(255,255,255,.035),rgba(255,255,255,.035) 1px,transparent 1px,transparent var(--ar-beat,26px))}
   #ar-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
             color:var(--mute);font-size:12px;pointer-events:none;padding:0 12px;text-align:center}
   #ar-playhead{position:absolute;top:0;bottom:0;width:2px;left:0;background:var(--ink);
@@ -125,7 +127,7 @@
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+bf2565e</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+3da0057</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
@@ -144,7 +146,7 @@
       <div class="func" id="c-func"></div>
       <div id="c-board"></div>
       <div class="row">
-        <button class="btn primary" id="c-down">Strum down</button>
+        <button class="btn" id="c-down">Strum down</button>
         <button class="btn" id="c-up">Strum up</button>
         <button class="btn" id="c-arp">Arpeggio</button>
         <button class="btn toggle" id="c-pm" aria-pressed="false">Palm mute</button>
@@ -526,38 +528,41 @@ function blockLabel(b){
   return CHORDS[b.root][b.quality].label;
 }
 
-/* ---- the song model: every block is a MIDI loop of whole bars ----
-   A block plays for b.bars bars. Its content is one loop (blockLoopStrokes) spanning
-   blockLoopBars bars; stretching the block REPEATS that loop to fill the extra bars —
-   more notes, same tempo. This is the EZbass Song-Track model: you stack loops. */
+/* ---- the song model: a block is a MIDI loop measured in quarter-note BEATS ----
+   A block plays for b.lenBeats beats (snapped to the beat). Its content is one loop
+   (blockLoopStrokes) spanning blockLoopBeats beats; stretching REPEATS that loop to fill the
+   extra beats — partial loops allowed at beat boundaries. Stack loops, snap to 1/4. */
 const BEATS_PER_BAR = 4;                                  // 4/4 throughout
-function blockLoopBars(b){
-  if(b.source==='prog')  return b.chords.length;          // one chord per bar
-  if(b.source==='power'){ const pp=POWER_PATS[b.patternId];
-                          return Math.max(1, Math.round((pp.p.length/pp.div)/BEATS_PER_BAR)); }
-  return 1;                                               // strum / chord = a one-bar loop
+function blockLoopBeats(b){
+  if(b.source==='prog')  return b.chords.length*BEATS_PER_BAR;   // one chord per bar
+  if(b.source==='power'){ const pp=POWER_PATS[b.patternId]; return pp.p.length/pp.div; }
+  return BEATS_PER_BAR;                                   // strum groove / single chord = 1 bar
 }
-// the strums of ONE loop iteration: {atBeat (0..loopBars×4), kind, drive, frets}
+// the strums of ONE loop iteration: {atBeat (0..loopBeats), kind, drive, frets}
 function blockLoopStrokes(b){
   const out=[];
+  if(b.source==='chord'){                                 // a single chord = ONE strum (no invented rhythm)
+    out.push({atBeat:0, kind:'D', drive:false, frets:CHORDS[b.root][b.quality].frets});
+    return out;
+  }
   if(b.source==='power'){
     const pp=POWER_PATS[b.patternId], slot=1/pp.div, frets=powerChord(b.root, b.three);
     pp.p.forEach((k,i)=>{ if(k) out.push({atBeat:i*slot, kind:k, drive:!!b.drive, frets}); });
     return out;
   }
-  if(b.source==='prog'){                                  // a strum pattern, one chord per bar
+  if(b.source==='prog'){                                  // the strum pattern, one chord per bar
     const pat=STRUM_PATS[b.patternId], slot=0.5;
     b.chords.forEach((c,bar)=>{ const frets=CHORDS[c.root][c.quality].frets;
       pat.forEach((k,i)=>{ if(k) out.push({atBeat:bar*BEATS_PER_BAR+i*slot, kind:k, drive:false, frets}); }); });
     return out;
   }
-  const pat=STRUM_PATS[b.patternId], slot=0.5, frets=CHORDS[b.root][b.quality].frets;
+  const pat=STRUM_PATS[b.patternId], slot=0.5, frets=CHORDS[b.root][b.quality].frets;  // strum groove
   pat.forEach((k,i)=>{ if(k) out.push({atBeat:i*slot, kind:k, drive:false, frets}); });
   return out;
 }
-// tile the loop across the block's region (b.bars): stretching repeats it, shrinking truncates
+// tile the loop across the block's region (b.lenBeats beats): stretch repeats, shrink truncates
 function blockStrokes(b){
-  const loopBeats=blockLoopBars(b)*BEATS_PER_BAR, regionBeats=b.bars*BEATS_PER_BAR, EPS=1e-9;
+  const loopBeats=blockLoopBeats(b), regionBeats=b.lenBeats, EPS=1e-9;
   const loop=blockLoopStrokes(b), out=[];
   for(let base=0; base<regionBeats-EPS; base+=loopBeats)
     loop.forEach(s=>{ const at=base+s.atBeat;
@@ -596,7 +601,7 @@ function arrangeToMidi(strip){
   const bpm = strip.bpm||120;
   let notes=[];                                           // {startTick,endTick,midi,vel,si}
   blocks.forEach(b=>{
-    const base = b.startBar*BEATS_PER_BAR;                // block position, in beats
+    const base = b.startBeat;                             // block position, in beats
     blockNoteEvents(b, bpm).forEach(e=>{
       const startTick = Math.round((base + e.startBeat)*TPQ);
       const endTick = Math.max(startTick+1, Math.round((base + e.endBeat)*TPQ));
@@ -878,52 +883,60 @@ drawChords(); drawStrum(); buildStrumPats(); drawPower(); buildPowerPats();
 drawProg(); buildProgList();
 
 /* ==================== ARRANGER: SONG TRACK (DOM) ==================== */
-const AR = { blocks:[], bpm:120, program:25, pxPerBar:96, h:190, seq:0, open:false, loop:false };
+const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false };
 const arLane = $('ar-lane'), arRuler = $('ar-ruler'), arHead = $('ar-playhead'), arScroll = $('ar-scroll');
 function arMsg(t){ $('ar-msg').textContent = t||''; }
-function arEndBar(){ return AR.blocks.reduce((m,b)=>Math.max(m,b.startBar+b.bars),0); }
-function pluralBars(n){ return n+' bar'+(n===1?'':'s'); }
+function arEndBeat(){ return AR.blocks.reduce((m,b)=>Math.max(m,b.startBeat+b.lenBeats),0); }
+function fmtLen(beats){                                   // e.g. "2 bars", "1 bar + 2/4", "3/4"
+  const bars=Math.floor(beats/BEATS_PER_BAR), rem=beats%BEATS_PER_BAR;
+  const parts=[]; if(bars) parts.push(bars+' bar'+(bars>1?'s':''));
+  if(rem) parts.push(rem+'/4'); return parts.join(' + ')||'0';
+}
+function loopTag(b){ const r=b.lenBeats/blockLoopBeats(b); return (r>1&&Number.isInteger(r))?` · loop ×${r}`:''; }
 
 function arRender(){
-  const end=arEndBar(), px=AR.pxPerBar;
-  $('ar-count').textContent = `(${pluralBars(end)})`;
+  const end=arEndBeat(), px=AR.pxPerBeat, barPx=px*BEATS_PER_BAR;
+  $('ar-count').textContent = `(${fmtLen(end)})`;
   document.documentElement.style.setProperty('--ar-h', AR.h+'px');
-  document.documentElement.style.setProperty('--ar-bar', px+'px');
-  const spanBars = Math.max(end+4, Math.ceil((arScroll.clientWidth||600)/px));
-  $('ar-content').style.width = (spanBars*px)+'px';
+  document.documentElement.style.setProperty('--ar-bar', barPx+'px');
+  document.documentElement.style.setProperty('--ar-beat', px+'px');
+  const spanBeats = Math.max(end+BEATS_PER_BAR*2, Math.ceil((arScroll.clientWidth||600)/px));
+  $('ar-content').style.width = (spanBeats*px)+'px';
   $('ar-empty').style.display = AR.blocks.length ? 'none' : 'flex';
-  // ruler
+  // ruler: a numbered line at every bar, a faint tick at every beat
   arRuler.innerHTML='';
-  for(let i=0;i<=spanBars;i++){
-    const line=document.createElement('div'); line.className='ar-bar-line'; line.style.left=(i*px)+'px'; arRuler.append(line);
-    if(i<spanBars){ const num=document.createElement('div'); num.className='ar-bar-num'; num.style.left=(i*px)+'px'; num.textContent=(i+1); arRuler.append(num); }
+  for(let i=0;i<=spanBeats;i++){
+    const line=document.createElement('div');
+    line.className = (i%BEATS_PER_BAR===0) ? 'ar-bar-line' : 'ar-beat-line';
+    line.style.left=(i*px)+'px'; arRuler.append(line);
+    if(i%BEATS_PER_BAR===0 && i<spanBeats){ const num=document.createElement('div');
+      num.className='ar-bar-num'; num.style.left=(i*px)+'px'; num.textContent=(i/BEATS_PER_BAR+1); arRuler.append(num); }
   }
   // blocks
   [...arLane.querySelectorAll('.ar-block')].forEach(e=>e.remove());
   AR.blocks.forEach((b,idx)=>{
     const cls = b.source==='power'?' pow' : b.source==='prog'?' prog' : '';
-    const lb=blockLoopBars(b), reps=b.bars/lb;
-    const sub = pluralBars(b.bars) + (reps>1 && Number.isInteger(reps) ? ` · loop ×${reps}` : '');
     const el=document.createElement('div');
     el.className='ar-block'+cls;
-    el.style.left=(b.startBar*px)+'px';
-    el.style.width=Math.max(24,(b.bars*px-2))+'px';
-    el.style.setProperty('--loop',(lb*px)+'px');
+    el.style.left=(b.startBeat*px)+'px';
+    el.style.width=Math.max(20,(b.lenBeats*px-2))+'px';
+    el.style.setProperty('--loop',(blockLoopBeats(b)*px)+'px');
     el.innerHTML=`<span class="ar-seams"></span><span class="ar-lbl">${blockLabel(b)}</span>`
-      +`<span class="ar-sub">${sub}</span><span class="ar-rm" title="Remove">&times;</span>`
-      +`<span class="ar-grip" title="Drag edge to add/remove bars"></span>`;
+      +`<span class="ar-sub">${fmtLen(b.lenBeats)}${loopTag(b)}</span>`
+      +`<span class="ar-rm" title="Remove">&times;</span>`
+      +`<span class="ar-grip" title="Drag edge to add/remove beats"></span>`;
     b.el=el; el.dataset.i=idx; arWireBlock(el,b); arLane.append(el);
   });
 }
 function arAdd(cap){
-  const b = Object.assign({id:++AR.seq, startBar:arEndBar()}, cap);
-  b.bars = blockLoopBars(b);
+  const b = Object.assign({id:++AR.seq, startBeat:arEndBeat()}, cap);
+  b.lenBeats = blockLoopBeats(b);                          // its own length
   AR.blocks.push(b); arRender(); arSave();
-  arMsg(`Added ${blockLabel(b)} — ${pluralBars(b.bars)}`);
+  arMsg(`Added ${blockLabel(b)} — ${fmtLen(b.lenBeats)}`);
   if(!AR.open) arToggle(true);
 }
-/* capture the current audition of each tab as a loop */
-function capChord(){ return {source:'chord', root:cRoot, quality:cQual, patternId:'downs'}; }  // chord => a 1-bar strum loop
+/* capture the current audition of each tab, replayed exactly (no invented rhythm) */
+function capChord(){ return {source:'chord', root:cRoot, quality:cQual}; }              // a single strum
 function capStrum(){ const [r,q]=SC[sChord]; return {source:'strum', root:r, quality:q, patternId:sPat}; }
 function capPower(){ return {source:'power', root:pRoot, three:pThree, drive:pDrive, patternId:pPat}; }
 function capProg(){ const p=currentProg(); if(!p) return null;
@@ -933,18 +946,17 @@ $('s-add').onclick=()=>arAdd(capStrum());
 $('p-add').onclick=()=>arAdd(capPower());
 $('pg-add').onclick=()=>{ const c=capProg(); if(c) arAdd(c); else arMsg('No progression selected.'); };
 
-/* per-block drag (reposition, snap to bar), edge-resize (add/remove whole bars), remove */
+/* per-block drag (reposition), edge-resize (add/remove beats), remove — all snap to the beat */
 function arWireBlock(el,b){
-  const px=()=>AR.pxPerBar;
-  const paint=()=>{ el.style.left=(b.startBar*px())+'px'; el.style.width=Math.max(24,(b.bars*px()-2))+'px'; };
+  const px=()=>AR.pxPerBeat;
   el.querySelector('.ar-rm').onclick=(e)=>{ e.stopPropagation();
     AR.blocks=AR.blocks.filter(x=>x!==b); arRender(); arSave(); arMsg('Removed a block.'); };
   const grip=el.querySelector('.ar-grip');
   grip.onpointerdown=(e)=>{ e.stopPropagation(); e.preventDefault();
-    const x0=e.clientX, bars0=b.bars; grip.setPointerCapture(e.pointerId);
-    const mv=(ev)=>{ b.bars=Math.max(1, bars0+Math.round((ev.clientX-x0)/px())); paint();
-                     const r=b.bars/blockLoopBars(b);
-                     el.querySelector('.ar-sub').textContent=pluralBars(b.bars)+(r>1&&Number.isInteger(r)?` · loop ×${r}`:''); };
+    const x0=e.clientX, len0=b.lenBeats; grip.setPointerCapture(e.pointerId);
+    const mv=(ev)=>{ b.lenBeats=Math.max(1, len0+Math.round((ev.clientX-x0)/px()));
+                     el.style.width=Math.max(20,(b.lenBeats*px()-2))+'px';
+                     el.querySelector('.ar-sub').textContent=fmtLen(b.lenBeats)+loopTag(b); };
     const up=()=>{ grip.removeEventListener('pointermove',mv); grip.removeEventListener('pointerup',up);
                    arReflow(); arRender(); arSave(); };
     grip.addEventListener('pointermove',mv); grip.addEventListener('pointerup',up);
@@ -952,18 +964,18 @@ function arWireBlock(el,b){
   el.onpointerdown=(e)=>{
     if(e.target.classList.contains('ar-grip')||e.target.classList.contains('ar-rm')) return;
     e.preventDefault(); el.classList.add('drag'); el.setPointerCapture(e.pointerId);
-    const x0=e.clientX, bar0=b.startBar;
-    const mv=(ev)=>{ b.startBar=Math.max(0, bar0+Math.round((ev.clientX-x0)/px())); el.style.left=(b.startBar*px())+'px'; };
+    const x0=e.clientX, beat0=b.startBeat;
+    const mv=(ev)=>{ b.startBeat=Math.max(0, beat0+Math.round((ev.clientX-x0)/px())); el.style.left=(b.startBeat*px())+'px'; };
     const up=()=>{ el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up);
                    el.classList.remove('drag'); arReflow(); arRender(); arSave(); };
     el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up);
   };
 }
-/* keep blocks tiled end to end in bar order, no overlap */
+/* keep blocks tiled end to end in beat order, no overlap */
 function arReflow(){
-  AR.blocks.sort((a,b)=> a.startBar-b.startBar || a.id-b.id);
+  AR.blocks.sort((a,b)=> a.startBeat-b.startBeat || a.id-b.id);
   let cursor=0;
-  AR.blocks.forEach(b=>{ if(b.startBar<cursor) b.startBar=cursor; cursor=b.startBar+b.bars; });
+  AR.blocks.forEach(b=>{ if(b.startBeat<cursor) b.startBeat=cursor; cursor=b.startBeat+b.lenBeats; });
 }
 /* resize the whole song track vertically */
 $('ar-resize').onpointerdown=(e)=>{ e.preventDefault(); const y0=e.clientY, h0=AR.h;
@@ -988,9 +1000,9 @@ $('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; AR.blocks=[]; arRender
 function arPlay(){
   if(T){ stopAll(); return; }
   if(!AR.blocks.length){ arMsg('The song is empty — add a loop first.'); return; }
-  const spb=60/AR.bpm, songBeats=arEndBar()*BEATS_PER_BAR, notes=[];
+  const spb=60/AR.bpm, songBeats=arEndBeat(), notes=[];
   AR.blocks.forEach((b,idx)=>{
-    const base=b.startBar*BEATS_PER_BAR;
+    const base=b.startBeat;
     blockNoteEvents(b, AR.bpm).forEach(e=> notes.push({
       startBeat:base+e.startBeat, endBeat:base+e.endBeat,
       midi:e.midi, vel:e.vel, art:e.art, si:e.si, drive:!!(b.source==='power'&&b.drive), idx })); });
@@ -1015,7 +1027,7 @@ function arPlay(){
   arSweep(t0, songBeats, spb);
 }
 function arSweep(t0, songBeats, spb){
-  const px=AR.pxPerBar/BEATS_PER_BAR;                      // px per beat
+  const px=AR.pxPerBeat;                                   // px per beat
   const step=()=>{
     if(!T || T.btn!==$('ar-play')){ $('arranger').classList.remove('playing'); arMsg(''); return; }
     let beat=(ctx.currentTime-t0)/spb; if(beat<0) beat=0;
@@ -1037,7 +1049,7 @@ function arExport(){
   const a=document.createElement('a'); a.href=url; a.download='song.mid';
   document.body.append(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
-  arMsg(`Exported ${pluralBars(arEndBar())} of MIDI.`);
+  arMsg(`Exported ${fmtLen(arEndBeat())} of MIDI.`);
 }
 $('ar-export').onclick=arExport;
 $('ar-bpm').oninput=e=>{ AR.bpm=+e.target.value; $('ar-bpmv').textContent=e.target.value; arSave(); };
@@ -1046,14 +1058,14 @@ $('ar-bpm').oninput=e=>{ AR.bpm=+e.target.value; $('ar-bpmv').textContent=e.targ
 function arSave(){
   try{ localStorage.setItem('gcp-arranger', JSON.stringify({
     blocks:AR.blocks.map(b=>({source:b.source,root:b.root,quality:b.quality,three:!!b.three,
-      drive:!!b.drive,patternId:b.patternId,chords:b.chords,name:b.name,startBar:b.startBar,bars:b.bars})),
+      drive:!!b.drive,patternId:b.patternId,chords:b.chords,name:b.name,startBeat:b.startBeat,lenBeats:b.lenBeats})),
     bpm:AR.bpm, program:AR.program, h:AR.h, loop:AR.loop })); }catch(e){}
 }
 function arLoad(){
   try{ const s=JSON.parse(localStorage.getItem('gcp-arranger')); if(!s) return;
     AR.bpm=s.bpm||120; AR.program=s.program||25; AR.h=s.h||190; AR.loop=!!s.loop;
     AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
-      .filter(b=>{ try{ blockLoopStrokes(b); return b.bars>=1; }catch(e){ return false; } });
+      .filter(b=>{ try{ blockLoopStrokes(b); return b.lenBeats>=1; }catch(e){ return false; } });
     $('ar-bpm').value=AR.bpm; $('ar-bpmv').textContent=AR.bpm;
     $('ar-loop').setAttribute('aria-pressed', AR.loop);
   }catch(e){ AR.blocks=[]; }

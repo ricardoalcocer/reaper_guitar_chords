@@ -1,23 +1,21 @@
 // The song model + MIDI export are pure functions in the ARRANGER CORE block of
-// web_template.html. This slices that block (like test_parity.js) and asserts the model:
-// a block is a bar-length LOOP; stretching it REPEATS the notes; pitches are OPEN[i]+fret;
-// every Note-On has a matching Note-Off; no same-string overlap; empty song exports nothing.
+// web_template.html. This slices that block (like test_parity.js) and asserts the model
+// the user specified: blocks are loops measured in quarter-note BEATS; a single chord is ONE
+// strum (not a fabricated pattern); stretching REPEATS the loop's notes (partial loops allowed);
+// pitches are OPEN[i]+fret; every Note-On has a matching Note-Off; empty song exports nothing.
 const fs = require('fs');
 const html = fs.readFileSync('src/web_template.html', 'utf8');
 
-// real constants pulled from the template
 var OPEN, SPREAD;
 eval('OPEN = '   + html.match(/const OPEN = (\[[^\]]*\]);/)[1]);
 eval('SPREAD = ' + html.match(/const SPREAD = (\{[^}]*\});/)[1]);
 
-// fixtures the core closes over (test inputs, not the logic under test)
 var NAMES = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
 var CHORDS = { C:{ maj:{ frets:[null,3,2,0,1,0], label:'C' } }, G:{ maj:{ frets:[3,2,0,0,0,3], label:'G' } } };
-var STRUM_PATS = { downs:['D',null,'D',null,'D',null,'D',null], eighths:['D','U','D','U','D','U','D','U'] };
-var POWER_PATS = { gallop:{ p:['P',null,'P','P','P',null,'P','P','P',null,'P','P','P',null,'P','P'], div:4 } };
-function powerChord(root){ return [ (NAMES.indexOf(root)+12-4)%12, 0,0,0,0,0 ]; }  // any 2 fretted strings
+var STRUM_PATS = { downs:['D',null,'D',null,'D',null,'D',null] };   // 4 downstrokes over 1 bar
+var POWER_PATS = {};
+function powerChord(root){ return [ (NAMES.indexOf(root)+12-4)%12, 0,0,0,0,0 ]; }
 
-// the logic under test, sliced from the template
 const coreStart = html.indexOf('function strokeEvents');
 const coreEnd   = html.indexOf('/* ==================== END ARRANGER CORE');
 if (coreStart < 0 || coreEnd < 0) { console.error('could not locate ARRANGER CORE block'); process.exit(1); }
@@ -26,7 +24,6 @@ eval(html.slice(coreStart, coreEnd));
 let bad = 0;
 function ok(cond, msg){ if(!cond){ console.log('FAIL: ' + msg); bad++; } }
 
-// minimal running-status-aware SMF parser
 function parseSMF(bytes){
   const b = Array.from(bytes);
   const ascii = (o,n)=>b.slice(o,o+n).map(c=>String.fromCharCode(c)).join('');
@@ -45,68 +42,67 @@ function parseSMF(bytes){
   }
   return {division, ons, offs, trkEnd:end, total:b.length};
 }
-function noteOnCount(strip){ return parseSMF(arrangeToMidi(strip)).ons.length; }
+const noteOns = (strip)=> parseSMF(arrangeToMidi(strip)).ons.length;
 
-// ---------- 1: strokeEvents — pitches and SPREAD stagger ----------
+// ---------- 1: strokeEvents pitches + SPREAD stagger ----------
 {
-  const frets = CHORDS.C.maj.frets, evs = strokeEvents(frets,'D');
-  ok(evs.length===5, 'C maj downstroke sounds 5 strings');
+  const evs = strokeEvents(CHORDS.C.maj.frets,'D');
+  ok(evs.length===5, 'C maj downstroke = 5 strings');
   evs.forEach((e,idx)=>{
-    ok(e.midi===OPEN[e.si]+frets[e.si], `event ${idx}: midi == OPEN[i]+fret`);
-    ok(Math.round(e.offBeat*480)===idx*14, `event ${idx}: stagger == ${idx*14} ticks (SPREAD.D)`);
+    ok(e.midi===OPEN[e.si]+CHORDS.C.maj.frets[e.si], `event ${idx}: midi == OPEN[i]+fret`);
+    ok(Math.round(e.offBeat*480)===idx*14, `event ${idx}: stagger == ${idx*14} ticks`);
   });
 }
 
-// ---------- 2: a block is a bar loop; export header + pitches ----------
+// ---------- 2: a single CHORD block is ONE strum (the bug the user hit) ----------
 {
-  const strip = { bpm:120, program:25, blocks:[
-    { source:'chord', root:'C', quality:'maj', patternId:'downs', startBar:0, bars:1 } ] };
-  const m = parseSMF(arrangeToMidi(strip));
+  const m = parseSMF(arrangeToMidi({ bpm:120, blocks:[
+    { source:'chord', root:'C', quality:'maj', startBeat:0, lenBeats:4 } ] }));
   ok(m.division===480, `division == 480 (got ${m.division})`);
   ok(m.trkEnd===m.total, 'MTrk length prefix matches content');
-  // 'downs' = 4 downstrokes/bar × 5 strings = 20 notes in a 1-bar chord loop
-  ok(m.ons.length===20 && m.offs.length===20, `1-bar chord loop = 20 notes (got ${m.ons.length}/${m.offs.length})`);
-  const onMidis=[...new Set(m.ons.map(o=>o.midi))].sort((a,b)=>a-b);
-  ok(JSON.stringify(onMidis)===JSON.stringify([48,52,55,60,64]), 'exported pitches match the C-maj voicing');
+  ok(m.ons.length===5 && m.offs.length===5, `one chord = ONE strum = 5 notes, NOT a pattern (got ${m.ons.length})`);
+  const onTicks=m.ons.map(o=>o.tick).sort((a,b)=>a-b);
+  ok(JSON.stringify(onTicks)===JSON.stringify([0,14,28,42,56]), `single strum, staggered 0,14,28,42,56 (got ${onTicks})`);
+  const onMidis=m.ons.map(o=>o.midi).sort((a,b)=>a-b);
+  ok(JSON.stringify(onMidis)===JSON.stringify([48,52,55,60,64]), 'pitches match the C-maj voicing');
 }
 
-// ---------- 3: STRETCHING A BLOCK REPEATS ITS NOTES (the core rule) ----------
+// ---------- 3: stretching a groove REPEATS its notes ----------
 {
-  const mk=(bars)=>({ bpm:120, blocks:[
-    { source:'strum', root:'C', quality:'maj', patternId:'downs', startBar:0, bars } ] });
-  const n1=noteOnCount(mk(1)), n2=noteOnCount(mk(2)), n4=noteOnCount(mk(4));
-  ok(n2===n1*2, `2 bars = twice the notes of 1 bar (${n1} -> ${n2})`);
-  ok(n4===n1*4, `4 bars = 4× the notes (${n1} -> ${n4}) — stretch repeats, not lengthens`);
+  const mk=(len)=>({ bpm:120, blocks:[ { source:'strum', root:'C', quality:'maj', patternId:'downs', startBeat:0, lenBeats:len } ] });
+  const n4=noteOns(mk(4)), n8=noteOns(mk(8)), n12=noteOns(mk(12));
+  ok(n4===20, `1-bar 'downs' groove = 4 downstrokes × 5 = 20 notes (got ${n4})`);
+  ok(n8===40, `2 bars = 2× the notes (${n4} -> ${n8})`);
+  ok(n12===60, `3 bars = 3× the notes (${n4} -> ${n12})`);
 }
 
-// ---------- 4: note LENGTH does not grow with the block (it's not sustain) ----------
+// ---------- 4: stretch snaps to the BEAT — a partial stretch plays a partial loop ----------
 {
-  const maxLen=(bars)=>{
-    const m=parseSMF(arrangeToMidi({bpm:120, blocks:[
-      {source:'strum', root:'C', quality:'maj', patternId:'downs', startBar:0, bars}]}));
-    const byMidi={}; m.ons.forEach(o=>{(byMidi[o.midi]=byMidi[o.midi]||[]).push({on:o.tick});});
-    m.offs.forEach(f=>{ const l=byMidi[f.midi]; if(!l) return;
-      const open=l.filter(x=>x.off===undefined && x.on<=f.tick).sort((a,b)=>b.on-a.on)[0]; if(open) open.off=f.tick; });
-    let mx=0; Object.values(byMidi).forEach(l=>l.forEach(x=>{ if(x.off!==undefined) mx=Math.max(mx,x.off-x.on); })); return mx;
-  };
-  ok(Math.abs(maxLen(1)-maxLen(4))<40, 'a stretched block keeps the same per-note length (no sustain)');
+  const mk=(len)=>({ bpm:120, blocks:[ { source:'strum', root:'C', quality:'maj', patternId:'downs', startBeat:0, lenBeats:len } ] });
+  // 'downs' hits on beats 0,1,2,3. Stretch 4 -> 5 beats: adds beat-4 (= loop's beat 0) hit only.
+  ok(noteOns(mk(5))===25, `+1 beat adds one more downstroke = 25 notes (got ${noteOns(mk(5))})`);
+  ok(noteOns(mk(6))===30, `+2 beats adds two downstrokes = 30 notes (got ${noteOns(mk(6))})`);
 }
 
-// ---------- 5: a progression is a multi-bar loop; stacking positions by bar ----------
+// ---------- 5: a single chord stretched repeats per bar (still not 4 strums) ----------
 {
-  // 2-chord progression = a 2-bar loop; place a second block after it at bar 2
+  const mk=(len)=>({ bpm:120, blocks:[ { source:'chord', root:'C', quality:'maj', startBeat:0, lenBeats:len } ] });
+  ok(noteOns(mk(4))===5,  `1 bar = 1 strum = 5 notes (got ${noteOns(mk(4))})`);
+  ok(noteOns(mk(8))===10, `2 bars = 2 strums = 10 notes, i.e. one strum per bar (got ${noteOns(mk(8))})`);
+}
+
+// ---------- 6: a progression is a multi-bar loop; stacking positions by beat ----------
+{
   const strip={ bpm:120, blocks:[
-    { source:'prog', chords:[{root:'C',quality:'maj'},{root:'G',quality:'maj'}], patternId:'downs', startBar:0, bars:2 },
-    { source:'strum', root:'C', quality:'maj', patternId:'downs', startBar:2, bars:1 } ]};
+    { source:'prog', chords:[{root:'C',quality:'maj'},{root:'G',quality:'maj'}], patternId:'downs', startBeat:0, lenBeats:8 },
+    { source:'strum', root:'C', quality:'maj', patternId:'downs', startBeat:8, lenBeats:4 } ]};
   const m=parseSMF(arrangeToMidi(strip));
-  // prog: 2 bars × 4 downs × ~5 strings; the trailing block starts at bar 2 = tick 2*4*480 = 3840
-  const firstOfSecond = Math.min(...m.ons.filter(o=>o.tick>=3840).map(o=>o.tick));
-  ok(firstOfSecond===3840, `the stacked block starts exactly at bar 3 (tick 3840, got ${firstOfSecond})`);
-  // matched on/off, no same-string overlap
+  const firstOfSecond = Math.min(...m.ons.filter(o=>o.tick>=8*480).map(o=>o.tick));
+  ok(firstOfSecond===8*480, `stacked block starts exactly at beat 8 (tick ${8*480}, got ${firstOfSecond})`);
   ok(m.ons.length===m.offs.length, 'every note-on has a matching note-off');
 }
 
-// ---------- 6: empty song exports nothing ----------
+// ---------- 7: empty song exports nothing ----------
 {
   ok(arrangeToMidi({ bpm:120, blocks:[] })===null, 'empty song -> arrangeToMidi returns null');
 }

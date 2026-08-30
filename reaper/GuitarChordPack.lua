@@ -3,10 +3,10 @@
   @description Browse guitar-voiced chords, audition them through the selected
                track's instrument, and insert them as MIDI at the edit cursor.
   @author generated for REAPER, no extensions required
-  @version 2.6.0+bf2565e
+  @version 2.6.0+3da0057
 --]]
 
-local VERSION = "2.6.0+bf2565e"
+local VERSION = "2.6.0+3da0057"
 
 ----------------------------------------------------------------------
 -- data
