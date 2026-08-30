@@ -127,7 +127,7 @@
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+41faa78</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+556744c</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
@@ -146,9 +146,9 @@
       <div class="func" id="c-func"></div>
       <div id="c-board"></div>
       <div class="row">
-        <button class="btn" id="c-down">Strum down</button>
-        <button class="btn" id="c-up">Strum up</button>
-        <button class="btn" id="c-arp">Arpeggio</button>
+        <button class="btn toggle" id="c-down" aria-pressed="true">Strum down</button>
+        <button class="btn toggle" id="c-up" aria-pressed="false">Strum up</button>
+        <button class="btn toggle" id="c-arp" aria-pressed="false">Arpeggio</button>
         <button class="btn toggle" id="c-pm" aria-pressed="false">Palm mute</button>
         <button class="btn" id="c-add" title="Add this chord to the arranger">+ Song</button>
       </div>
@@ -425,7 +425,7 @@ function play(midi, when, vel, kind, drive, voice, stopAt){
     src.onended = ()=>{ if(voices.get(voice) && voices.get(voice).src===src) voices.delete(voice); }; }
 }
 /* stroke shapes, in beats — identical spreads to the MIDI files */
-const SPREAD = {D:14/480, U:9/480, P:4/480, x:10/480};
+const SPREAD = {D:14/480, U:9/480, P:4/480, x:10/480, A:0.25};   // A = arpeggio: a 1/16 note between strings
 /* stroke() plays a strum; the per-string event list it plays is computed by
    strokeEvents() in the arranger core, so audition and MIDI export share one source. */
 function stroke(frets, kind, when, spb, drive, litFn){
@@ -514,6 +514,7 @@ function strokeEvents(frets, kind){
   let order = notes, vels, art;
   if(kind==='D'){ vels=[96,92,88,85,82,88].slice(-notes.length); art='open'; }
   else if(kind==='U'){ order=notes.slice(-4).reverse(); vels=[78,74,72,70]; art='open'; }
+  else if(kind==='A'){ vels=notes.map(()=>90); art='open'; }   // arpeggio: every string, low→high, wide spacing
   else if(kind==='x'){ vels=notes.map(()=>44); art='ghost'; }
   else { vels=[104,100,96,92,88,88].slice(-notes.length); art='mute'; }
   return order.map(([si,midi],i)=>({si, midi, offBeat:i*SPREAD[kind], vel:vels[i]||70, art}));
@@ -541,8 +542,9 @@ function blockLoopBeats(b){
 // the strums of ONE loop iteration: {atBeat (0..loopBeats), kind, drive, frets}
 function blockLoopStrokes(b){
   const out=[];
-  if(b.source==='chord'){                                 // a single chord = ONE strum (no invented rhythm)
-    out.push({atBeat:0, kind:'D', drive:false, frets:CHORDS[b.root][b.quality].frets});
+  if(b.source==='chord'){                                 // one hit, in the articulation that was auditioned
+    const kind = b.art==='arp' ? 'A' : (b.palmMute ? 'P' : (b.art||'D'));   // down / up / arpeggio / palm-muted
+    out.push({atBeat:0, kind, drive:false, frets:CHORDS[b.root][b.quality].frets});
     return out;
   }
   if(b.source==='power'){
@@ -564,6 +566,7 @@ function blockLoopStrokes(b){
 function blockStrokes(b){
   const loopBeats=blockLoopBeats(b), regionBeats=b.lenBeats, EPS=1e-9;
   const loop=blockLoopStrokes(b), out=[];
+  if(!(loopBeats>0)) return out;                          // guard a malformed (e.g. empty-chords) block — no infinite loop
   for(let base=0; base<regionBeats-EPS; base+=loopBeats)
     loop.forEach(s=>{ const at=base+s.atBeat;
       if(at<regionBeats-EPS) out.push({atBeat:at, kind:s.kind, drive:s.drive, frets:s.frets}); });
@@ -638,9 +641,11 @@ function arrangeToMidi(strip){
 /* ---------- transport ---------- */
 let T = null;
 function stopAll(){
-  if(T){ clearInterval(T.timer); T.cells&&T.cells.forEach(c=>c.classList.remove('now'));
+  if(T){ clearInterval(T.timer); if(T.stopTimer) clearTimeout(T.stopTimer);
+    T.cells&&T.cells.forEach(c=>c.classList.remove('now'));
     T.btn.textContent='Play'; T.btn.classList.add('primary'); T = null; }
   voices.clear();
+  const ar=document.getElementById('arranger'); if(ar) ar.classList.remove('playing');  // clear playhead regardless of rAF
 }
 function start(btn, cells, getStep, onStep){
   audio(); if(ctx.state==='suspended') ctx.resume();
@@ -664,7 +669,7 @@ function start(btn, cells, getStep, onStep){
 }
 
 /* ---------- chords tab ---------- */
-let cRoot='C', cQual='maj', cPM=false, keyPC=0, keyMode='maj', qMode='dia';   // default: C major, Diatonic
+let cRoot='C', cQual='maj', cPM=false, cArt='D', keyPC=0, keyMode='maj', qMode='dia';   // cArt: the chosen strum (D/U/arp)
 const $ = id => document.getElementById(id);
 // The 7 chords of the current key. qMode 'dia'/'dia7' = the natural diatonic qualities; ANY other
 // quality (e.g. 'm7') is applied to every degree — the roman numerals, all in that quality.
@@ -695,7 +700,7 @@ const QMODES = [['dia','Diatonic'],['dia7','Diatonic 7ths'],['maj','maj'],['m','
   ['maj7','maj7'],['m7b5','m7b5'],['dim7','dim7'],['dim','dim'],['aug','aug'],['sus2','sus2'],
   ['sus4','sus4'],['7sus4','7sus4'],['6','6'],['m6','m6'],['9','9'],['add9','add9']];
 QMODES.forEach(([v,l])=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=v;
-  b.textContent=l; b.onclick=()=>{ qMode=v; selectTonic(); drawChords(); strumC('D'); }; $('c-quals').append(b); });
+  b.textContent=l; b.onclick=()=>{ qMode=v; selectTonic(); drawChords(); strumC(cArt); }; $('c-quals').append(b); });
 function drawDiatonic(){
   const host = $('c-diatonic'); if(!host) return;
   host.innerHTML='';
@@ -703,7 +708,7 @@ function drawDiatonic(){
     const b=document.createElement('button'); b.className='dchip';
     b.setAttribute('aria-pressed', NAMES.indexOf(cRoot)===dc.pc && cQual===dc.quality);
     b.innerHTML=`<b>${dc.numeral}</b><span>${dc.root}${dc.quality==='maj'?'':dc.quality}</span>`;
-    b.onclick=()=>{ cRoot=NAMES[dc.pc]; cQual=dc.quality; drawChords(); strumC('D'); };
+    b.onclick=()=>{ cRoot=NAMES[dc.pc]; cQual=dc.quality; drawChords(); strumC(cArt); };
     host.append(b);
   });
   [...$('c-keys').children].forEach(b=>b.setAttribute('aria-pressed', NAMES.indexOf(b.dataset.v)===keyPC));
@@ -711,23 +716,23 @@ function drawDiatonic(){
 function strumC(kind){
   stopAll(); audio(); if(ctx.state==='suspended') ctx.resume();
   const f = CHORDS[cRoot][cQual].frets, spb = .6;
-  if(kind==='arp'){
-    f.map((x,i)=>x===null?null:i).filter(i=>i!==null).forEach((si,n)=>{
-      const t = ctx.currentTime+.05+n*.19;
-      play(OPEN[si]+f[si], t, 86, 'open', false, si); lighter('cb')(si,t,260);
-    });
-  } else stroke(f, cPM?'P':kind, ctx.currentTime+.05, spb, false, lighter('cb'));
+  // route every articulation through stroke() so what you hear == what a chord block replays
+  const k = kind==='arp' ? 'A' : (cPM ? 'P' : kind);
+  stroke(f, k, ctx.currentTime+.05, spb, false, lighter('cb'));
 }
 ROOTS.forEach(r=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=r;
-  b.textContent=r; b.onclick=()=>{keyPC=NAMES.indexOf(r);selectTonic();drawChords();strumC('D');}; $('c-keys').append(b); });
+  b.textContent=r; b.onclick=()=>{keyPC=NAMES.indexOf(r);selectTonic();drawChords();strumC(cArt);}; $('c-keys').append(b); });
 function setKeyMode(m){ keyMode=m;
   $('c-major').setAttribute('aria-pressed', m==='maj'); $('c-minor').setAttribute('aria-pressed', m==='min');
-  selectTonic(); drawChords(); strumC('D'); }
+  selectTonic(); drawChords(); strumC(cArt); }
 $('c-major').onclick=()=>setKeyMode('maj');
 $('c-minor').onclick=()=>setKeyMode('min');
-$('c-down').onclick=()=>strumC('D'); $('c-up').onclick=()=>strumC('U');
-$('c-arp').onclick=()=>strumC('arp');
-$('c-pm').onclick=e=>{cPM=!cPM;e.target.setAttribute('aria-pressed',cPM);strumC('D');};
+// the strum is a persistent choice, so what you add to the song matches what you hear
+function updateArt(){ [['D','c-down'],['U','c-up'],['arp','c-arp']].forEach(([a,id])=>$(id).setAttribute('aria-pressed', a===cArt)); }
+function setArt(a){ cArt=a; updateArt(); strumC(a); }
+$('c-down').onclick=()=>setArt('D'); $('c-up').onclick=()=>setArt('U');
+$('c-arp').onclick=()=>setArt('arp');
+$('c-pm').onclick=e=>{cPM=!cPM;e.target.setAttribute('aria-pressed',cPM);strumC(cArt);};
 
 /* ---------- strumming tab ---------- */
 let sRoot='A', sQual='m', sPat='classic', sCells=[];    // any chord, not a fixed shortlist
@@ -750,7 +755,7 @@ function buildStrumPats(){
     row.innerHTML=`<span class="pat-name">${name}</span><div class="grid">`+
       pat.map((k,i)=>`<span class="cell${i%2===0?' beat':''}${k?' hit':''}${k==='D'||k==='U'?' open':''}${k==='x'?' ghost':''}">${k==='x'?'×':(k||'')}</span>`).join('')+`</div>`;
     const go=()=>{ sPat=name; buildStrumPats(); playStrum(); };
-    row.onclick=go; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};
+    row.onclick=go; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();go();}};
     $('s-pats').append(row);
   });
 }
@@ -792,7 +797,7 @@ function buildPowerPats(){
     row.innerHTML=`<span class="pat-name">${name}</span><div class="grid">`+
       p.map((k,i)=>`<span class="cell${i%div===0?' beat':''}${k?' hit':''}${k==='D'?' open':''}${k==='x'?' ghost':''}"></span>`).join('')+`</div>`;
     const go=()=>{ pPat=name; buildPowerPats(); playPower(); };
-    row.onclick=go; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};
+    row.onclick=go; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();go();}};
     $('p-pats').append(row);
   });
 }
@@ -853,7 +858,7 @@ function buildProgList(){
     row.innerHTML = label + `<span style="font-family:var(--mono);color:var(--mute)">`
       + cs.map(c=>c.label).join(' - ') + `</span>`;
     const go=()=>{ pgSel=idx; drawProg(); buildProgList(); playProg(true); };
-    row.onclick=go; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};
+    row.onclick=go; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();go();}};
     host.append(row);
   });
 }
@@ -893,16 +898,18 @@ document.addEventListener('keydown',e=>{
   if(e.code==='Space' && !/INPUT|BUTTON/.test(e.target.tagName)){
     e.preventDefault();
     const v=document.querySelector('.tab[aria-selected=true]').dataset.view;
-    v==='chords'?strumC('D'):v==='strum'?playStrum():v==='power'?playPower():playProg();
+    v==='chords'?strumC(cArt):v==='strum'?playStrum():v==='power'?playPower():playProg();
   }
 });
-drawChords(); drawStrum(); buildStrumPats(); drawPower(); buildPowerPats();
+drawChords(); updateArt(); drawStrum(); buildStrumPats(); drawPower(); buildPowerPats();
 drawProg(); buildProgList();
 
 /* ==================== ARRANGER: SONG TRACK (DOM) ==================== */
 const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false };
 const arLane = $('ar-lane'), arRuler = $('ar-ruler'), arHead = $('ar-playhead'), arScroll = $('ar-scroll');
 function arMsg(t){ $('ar-msg').textContent = t||''; }
+// playback holds a snapshot of the notes, so any change to the block set must stop it
+function arStopIfPlaying(){ if(T && T.btn===$('ar-play')) stopAll(); }
 // reserve exactly the arranger's real height at the page bottom so nothing clips under it
 function arFit(){ document.body.style.paddingBottom = ($('arranger').offsetHeight + 16) + 'px'; }
 function arEndBeat(){ return AR.blocks.reduce((m,b)=>Math.max(m,b.startBeat+b.lenBeats),0); }
@@ -912,6 +919,8 @@ function fmtLen(beats){                                   // e.g. "2 bars", "1 b
   if(rem) parts.push(rem+'/4'); return parts.join(' + ')||'0';
 }
 function loopTag(b){ const r=b.lenBeats/blockLoopBeats(b); return (r>1&&Number.isInteger(r))?` · loop ×${r}`:''; }
+function artTag(b){ if(b.source!=='chord') return '';   // show how a chord block strums
+  if(b.art==='arp') return ' · arp'; if(b.palmMute) return ' · muted'; if(b.art==='U') return ' · up'; return ''; }
 
 function arRender(){
   const end=arEndBeat(), px=AR.pxPerBeat, barPx=px*BEATS_PER_BAR;
@@ -941,7 +950,7 @@ function arRender(){
     el.style.width=Math.max(20,(b.lenBeats*px-2))+'px';
     el.style.setProperty('--loop',(blockLoopBeats(b)*px)+'px');
     el.innerHTML=`<span class="ar-seams"></span><span class="ar-lbl">${blockLabel(b)}</span>`
-      +`<span class="ar-sub">${fmtLen(b.lenBeats)}${loopTag(b)}</span>`
+      +`<span class="ar-sub">${fmtLen(b.lenBeats)}${artTag(b)}${loopTag(b)}</span>`
       +`<span class="ar-rm" title="Remove">&times;</span>`
       +`<span class="ar-grip" title="Drag edge to add/remove beats"></span>`;
     b.el=el; el.dataset.i=idx; arWireBlock(el,b); arLane.append(el);
@@ -949,6 +958,7 @@ function arRender(){
   arFit();
 }
 function arAdd(cap){
+  arStopIfPlaying();
   const b = Object.assign({id:++AR.seq, startBeat:arEndBeat()}, cap);
   b.lenBeats = blockLoopBeats(b);                          // its own length
   AR.blocks.push(b); arRender(); arSave();
@@ -956,7 +966,7 @@ function arAdd(cap){
   if(!AR.open) arToggle(true);
 }
 /* capture the current audition of each tab, replayed exactly (no invented rhythm) */
-function capChord(){ return {source:'chord', root:cRoot, quality:cQual}; }              // a single strum
+function capChord(){ return {source:'chord', root:cRoot, quality:cQual, art:cArt, palmMute:cPM}; }   // exactly what was auditioned
 function capStrum(){ return {source:'strum', root:sRoot, quality:sQual, patternId:sPat}; }
 function capPower(){ return {source:'power', root:pRoot, three:pThree, drive:pDrive, patternId:pPat}; }
 function capProg(){ const p=currentProg(); if(!p) return null;
@@ -969,26 +979,26 @@ $('pg-add').onclick=()=>{ const c=capProg(); if(c) arAdd(c); else arMsg('No prog
 /* per-block drag (reposition), edge-resize (add/remove beats), remove — all snap to the beat */
 function arWireBlock(el,b){
   const px=()=>AR.pxPerBeat;
-  el.querySelector('.ar-rm').onclick=(e)=>{ e.stopPropagation();
+  el.querySelector('.ar-rm').onclick=(e)=>{ e.stopPropagation(); arStopIfPlaying();
     AR.blocks=AR.blocks.filter(x=>x!==b); arRender(); arSave(); arMsg('Removed a block.'); };
   const grip=el.querySelector('.ar-grip');
-  grip.onpointerdown=(e)=>{ e.stopPropagation(); e.preventDefault();
+  grip.onpointerdown=(e)=>{ e.stopPropagation(); e.preventDefault(); arStopIfPlaying();
     const x0=e.clientX, len0=b.lenBeats; grip.setPointerCapture(e.pointerId);
     const mv=(ev)=>{ b.lenBeats=Math.max(1, len0+Math.round((ev.clientX-x0)/px()));
                      el.style.width=Math.max(20,(b.lenBeats*px()-2))+'px';
-                     el.querySelector('.ar-sub').textContent=fmtLen(b.lenBeats)+loopTag(b); };
+                     el.querySelector('.ar-sub').textContent=fmtLen(b.lenBeats)+artTag(b)+loopTag(b); };
     const up=()=>{ grip.removeEventListener('pointermove',mv); grip.removeEventListener('pointerup',up);
-                   arReflow(); arRender(); arSave(); };
-    grip.addEventListener('pointermove',mv); grip.addEventListener('pointerup',up);
+                   grip.removeEventListener('pointercancel',up); arReflow(); arRender(); arSave(); };
+    grip.addEventListener('pointermove',mv); grip.addEventListener('pointerup',up); grip.addEventListener('pointercancel',up);
   };
   el.onpointerdown=(e)=>{
     if(e.target.classList.contains('ar-grip')||e.target.classList.contains('ar-rm')) return;
-    e.preventDefault(); el.classList.add('drag'); el.setPointerCapture(e.pointerId);
+    e.preventDefault(); arStopIfPlaying(); el.classList.add('drag'); el.setPointerCapture(e.pointerId);
     const x0=e.clientX, beat0=b.startBeat;
     const mv=(ev)=>{ b.startBeat=Math.max(0, beat0+Math.round((ev.clientX-x0)/px())); el.style.left=(b.startBeat*px())+'px'; };
     const up=()=>{ el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up);
-                   el.classList.remove('drag'); arReflow(); arRender(); arSave(); };
-    el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up);
+                   el.removeEventListener('pointercancel',up); el.classList.remove('drag'); arReflow(); arRender(); arSave(); };
+    el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up);
   };
 }
 /* keep blocks tiled end to end in beat order, no overlap */
@@ -1002,8 +1012,9 @@ $('ar-resize').onpointerdown=(e)=>{ e.preventDefault(); const y0=e.clientY, h0=A
   const r=$('ar-resize'); r.setPointerCapture(e.pointerId);
   const mv=(ev)=>{ AR.h=Math.min(460, Math.max(130, h0+(y0-ev.clientY)));
                    document.documentElement.style.setProperty('--ar-h', AR.h+'px'); arFit(); };
-  const up=()=>{ r.removeEventListener('pointermove',mv); r.removeEventListener('pointerup',up); arSave(); };
-  r.addEventListener('pointermove',mv); r.addEventListener('pointerup',up);
+  const up=()=>{ r.removeEventListener('pointermove',mv); r.removeEventListener('pointerup',up);
+                 r.removeEventListener('pointercancel',up); arSave(); };
+  r.addEventListener('pointermove',mv); r.addEventListener('pointerup',up); r.addEventListener('pointercancel',up);
 };
 function arToggle(force){
   AR.open = force===undefined ? !AR.open : force;
@@ -1014,7 +1025,7 @@ function arToggle(force){
 }
 $('ar-title').onclick=()=>arToggle();
 $('ar-loop').onclick=e=>{ AR.loop=!AR.loop; e.target.setAttribute('aria-pressed',AR.loop); arSave(); };
-$('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; AR.blocks=[]; arRender(); arSave(); arMsg('Cleared.'); };
+$('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; arStopIfPlaying(); AR.blocks=[]; arRender(); arSave(); arMsg('Cleared.'); };
 
 /* play the whole song through the existing transport; a playhead sweeps the bars */
 function arPlay(){
@@ -1030,20 +1041,21 @@ function arPlay(){
   if(!notes.length){ arMsg('Nothing to play.'); return; }
   const cells=AR.blocks.map(b=>b.el), total=notes.length;
   arMsg(AR.loop?'Playing (looping)…':'Playing…');
-  $('arranger').classList.add('playing');
   const t0 = (audio(), ctx.currentTime + .12);            // matches start()'s look-ahead
   start($('ar-play'), cells, (i,when)=>{
     if(!AR.loop && i>=total){
-      setTimeout(()=>{ if(T&&T.btn===$('ar-play')){ stopAll(); } },
-                 Math.max(0,(when-ctx.currentTime))*1000+400);
+      if(T && !T.stopTimer){ const songEnd=t0+songBeats*spb;   // stop once, ~after the last note rings
+        T.stopTimer=setTimeout(()=>{ if(T&&T.btn===$('ar-play')) stopAll(); }, Math.max(0,(songEnd-ctx.currentTime))*1000+500); }
       return {slot:-1, dur:1};
     }
-    const k=i%total, n=notes[k];
-    play(n.midi, when, n.vel, n.art, n.drive, n.si, when+Math.max(0.02,(n.endBeat-n.startBeat)*spb));
+    const k=i%total, pass=Math.floor(i/total), n=notes[k];
+    const at=t0+(n.startBeat+pass*songBeats)*spb;         // absolute beat time — matches export + the playhead
+    play(n.midi, at, n.vel, n.art, n.drive, n.si, at+Math.max(0.02,(n.endBeat-n.startBeat)*spb));
     const gap = (k+1<total) ? notes[k+1].startBeat-n.startBeat
                             : (songBeats-n.startBeat)+(AR.loop?notes[0].startBeat:0.25);
     return {slot:n.idx, dur:Math.max(0.005, gap*spb)};
   });
+  $('arranger').classList.add('playing');   // after start() (which calls stopAll and clears it)
   arSweep(t0, songBeats, spb);
 }
 function arSweep(t0, songBeats, spb){
@@ -1077,15 +1089,16 @@ $('ar-bpm').oninput=e=>{ AR.bpm=+e.target.value; $('ar-bpmv').textContent=e.targ
 /* persistence — guarded localStorage */
 function arSave(){
   try{ localStorage.setItem('gcp-arranger', JSON.stringify({
-    blocks:AR.blocks.map(b=>({source:b.source,root:b.root,quality:b.quality,three:!!b.three,
+    blocks:AR.blocks.map(b=>({source:b.source,root:b.root,quality:b.quality,art:b.art,palmMute:!!b.palmMute,three:!!b.three,
       drive:!!b.drive,patternId:b.patternId,chords:b.chords,name:b.name,startBeat:b.startBeat,lenBeats:b.lenBeats})),
     bpm:AR.bpm, program:AR.program, h:AR.h, loop:AR.loop })); }catch(e){}
 }
 function arLoad(){
   try{ const s=JSON.parse(localStorage.getItem('gcp-arranger')); if(!s) return;
-    AR.bpm=s.bpm||120; AR.program=s.program||25; AR.h=s.h||190; AR.loop=!!s.loop;
+    AR.bpm=Math.max(40, Math.min(300, +s.bpm||120)); AR.program=s.program==null?25:s.program;
+    AR.h=s.h||190; AR.loop=!!s.loop;
     AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
-      .filter(b=>{ try{ blockLoopStrokes(b); return b.lenBeats>=1; }catch(e){ return false; } });
+      .filter(b=>{ try{ blockLoopStrokes(b); return b.lenBeats>=1 && blockLoopBeats(b)>0; }catch(e){ return false; } });
     $('ar-bpm').value=AR.bpm; $('ar-bpmv').textContent=AR.bpm;
     $('ar-loop').setAttribute('aria-pressed', AR.loop);
   }catch(e){ AR.blocks=[]; }

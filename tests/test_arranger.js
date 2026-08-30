@@ -102,6 +102,35 @@ const noteOns = (strip)=> parseSMF(arrangeToMidi(strip)).ons.length;
   ok(m.ons.length===m.offs.length, 'every note-on has a matching note-off');
 }
 
+// ---------- 6b: a chord block replays the ARTICULATION that was auditioned ----------
+{
+  // arpeggio: every string, spaced a 1/16 (0.25 beat = 120 ticks) apart — not a strum's 14 ticks
+  const arp = parseSMF(arrangeToMidi({ bpm:120, blocks:[
+    { source:'chord', root:'C', quality:'maj', art:'arp', startBeat:0, lenBeats:4 } ] }));
+  ok(arp.ons.length===5, `arp chord = 5 notes (got ${arp.ons.length})`);
+  const t=arp.ons.map(o=>o.tick).sort((a,b)=>a-b), gaps=[]; for(let i=1;i<t.length;i++) gaps.push(t[i]-t[i-1]);
+  ok(gaps.every(g=>g===120), `arpeggio notes spaced 120 ticks — an arpeggio, not a strum (gaps ${gaps})`);
+  // down-strum stays tight (14-tick stagger) — proves the two differ
+  const down = parseSMF(arrangeToMidi({ bpm:120, blocks:[
+    { source:'chord', root:'C', quality:'maj', art:'D', startBeat:0, lenBeats:4 } ] }));
+  const td=down.ons.map(o=>o.tick).sort((a,b)=>a-b);
+  ok(td[1]-td[0]===14, `down-strum stays a 14-tick stagger (got ${td[1]-td[0]})`);
+  // up-strum sounds only the top strings
+  const up = parseSMF(arrangeToMidi({ bpm:120, blocks:[
+    { source:'chord', root:'C', quality:'maj', art:'U', startBeat:0, lenBeats:4 } ] }));
+  ok(up.ons.length===4, `up-strum hits the top 4 strings only (got ${up.ons.length})`);
+}
+
+// ---------- 6c: a malformed prog block (empty chords) must NOT infinite-loop ----------
+{
+  // blockLoopBeats would be 0; blockStrokes must bail instead of looping forever. If this hangs,
+  // the guard regressed. It should contribute no notes but still produce a valid file.
+  const bytes = arrangeToMidi({ bpm:120, blocks:[
+    { source:'prog', chords:[], patternId:'downs', startBeat:0, lenBeats:4 } ] });
+  ok(bytes && String.fromCharCode(bytes[0],bytes[1],bytes[2],bytes[3])==='MThd',
+     'empty-chords prog block does not hang and yields a valid MThd file');
+}
+
 // ---------- 7: empty song exports nothing ----------
 {
   ok(arrangeToMidi({ bpm:120, blocks:[] })===null, 'empty song -> arrangeToMidi returns null');
