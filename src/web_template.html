@@ -97,9 +97,13 @@
   #ar-content{position:relative;min-width:100%;height:calc(var(--ar-h,190px) - 62px)}
   #ar-ruler{position:relative;height:20px;border-bottom:1px solid var(--line);
             background:#212429;font:10px var(--mono);color:var(--mute);cursor:text;touch-action:none;z-index:2}
-  #ar-loopband{position:absolute;top:0;bottom:0;z-index:1;pointer-events:none;
+  #ar-loopband{position:absolute;top:20px;bottom:0;z-index:1;pointer-events:none;
                background:rgba(228,162,60,.12);border-left:2px solid var(--amber);border-right:2px solid var(--amber)}
-  #ar-loopband::before{content:"loop";position:absolute;top:2px;left:4px;font:700 9px var(--mono);color:var(--amber);letter-spacing:.1em}
+  .ar-ruler-loop{position:absolute;top:0;bottom:0;pointer-events:none;
+                 background:rgba(228,162,60,.22);border-left:2px solid var(--amber);border-right:2px solid var(--amber)}
+  .ar-ruler-loop-lbl{position:absolute;top:3px;left:50%;transform:translateX(-50%);
+                     font:700 9px var(--mono);color:var(--amber);white-space:nowrap;
+                     text-shadow:0 1px 2px rgba(0,0,0,.7);letter-spacing:.03em}
   .ar-bar-num{position:absolute;top:4px;transform:translateX(4px);pointer-events:none;font-weight:700;color:var(--ink)}
   .ar-bar-line{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
   .ar-beat-line{position:absolute;top:11px;bottom:0;width:1px;background:var(--line);opacity:.4}
@@ -165,7 +169,7 @@
       </div>
       <p class="eyebrow" style="margin-top:14px">Quality &mdash; applied across the key</p>
       <div class="chips" id="c-quals"></div>
-      <p class="eyebrow" style="margin-top:14px">Chords in this key</p>
+      <p class="eyebrow" style="margin-top:14px">Chords in this key &mdash; play with keys <b style="color:var(--ink)">a s d f g h j</b></p>
       <div class="chips" id="c-diatonic"></div>
     </div>
   </div>
@@ -899,10 +903,18 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   ['chords','strum','power','prog'].forEach(v=>$('v-'+v).hidden = v!==t.dataset.view);
 });
 document.addEventListener('keydown',e=>{
-  if(e.code==='Space' && !/INPUT|BUTTON/.test(e.target.tagName)){
+  const typing=/INPUT|TEXTAREA/.test(e.target.tagName);
+  const v=document.querySelector('.tab[aria-selected=true]').dataset.view;
+  if(e.code==='Space' && !typing && !/BUTTON/.test(e.target.tagName)){
     e.preventDefault();
-    const v=document.querySelector('.tab[aria-selected=true]').dataset.view;
     v==='chords'?strumC(cArt):v==='strum'?playStrum():v==='power'?playPower():playProg();
+    return;
+  }
+  // Chords tab: home-row a s d f g h j play the 7 chords in the current key (I..vii°)
+  if(v==='chords' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey){
+    const i='asdfghj'.indexOf(e.key);
+    if(i>=0){ e.preventDefault(); const dc=keyDegrees()[i];
+      cRoot=NAMES[dc.pc]; cQual=dc.quality; drawChords(); strumC(cArt); }
   }
 });
 drawChords(); updateArt(); drawStrum(); buildStrumPats(); drawPower(); buildPowerPats();
@@ -923,6 +935,7 @@ function fmtLen(beats){                                   // e.g. "2 bars", "1 b
   if(rem) parts.push(rem+'/4'); return parts.join(' + ')||'0';
 }
 function loopTag(b){ const r=b.lenBeats/blockLoopBeats(b); return (r>1&&Number.isInteger(r))?` · loop ×${r}`:''; }
+function fmtPos(beat){ return (Math.floor(beat/BEATS_PER_BAR)+1)+'.'+(beat%BEATS_PER_BAR+1); }   // bar.beat, 1-indexed
 function artTag(b){ if(b.source!=='chord') return '';   // show how a chord block strums
   if(b.art==='arp') return ' · arp'; if(b.palmMute) return ' · muted'; if(b.art==='U') return ' · up'; return ''; }
 
@@ -944,10 +957,15 @@ function arRender(){
     if(i%BEATS_PER_BAR===0 && i<spanBeats){ const num=document.createElement('div');
       num.className='ar-bar-num'; num.style.left=(i*px)+'px'; num.textContent=(i/BEATS_PER_BAR+1); arRuler.append(num); }
   }
-  // loop region band
+  // loop region: a lane tint + a labelled strip on the ruler showing the bar.beat range
   const lb=$('ar-loopband');
-  if(AR.loopA!=null && AR.loopB>AR.loopA){ lb.hidden=false; lb.style.left=(AR.loopA*px)+'px'; lb.style.width=((AR.loopB-AR.loopA)*px)+'px'; }
-  else lb.hidden=true;
+  if(AR.loopA!=null && AR.loopB>AR.loopA){
+    lb.hidden=false; lb.style.left=(AR.loopA*px)+'px'; lb.style.width=((AR.loopB-AR.loopA)*px)+'px';
+    const strip=document.createElement('div'); strip.className='ar-ruler-loop';
+    strip.style.left=(AR.loopA*px)+'px'; strip.style.width=((AR.loopB-AR.loopA)*px)+'px';
+    strip.innerHTML=`<span class="ar-ruler-loop-lbl">&#8635; ${fmtPos(AR.loopA)}&ndash;${fmtPos(AR.loopB)}</span>`;
+    arRuler.append(strip);
+  } else lb.hidden=true;
   // blocks
   [...arLane.querySelectorAll('.ar-block')].forEach(e=>e.remove());
   AR.blocks.forEach((b,idx)=>{
