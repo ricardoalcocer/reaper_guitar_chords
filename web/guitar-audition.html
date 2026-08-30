@@ -82,7 +82,7 @@
             display:flex;flex-direction:column}
   #ar-resize{height:6px;cursor:ns-resize;background:linear-gradient(var(--line),transparent);opacity:0}
   #arranger.open #ar-resize{opacity:1}
-  #ar-bar{display:flex;gap:8px;align-items:center;padding:8px 14px}
+  #ar-bar{display:flex;gap:8px;align-items:center;padding:8px 14px;flex-wrap:wrap}
   #ar-title{font:600 12px/1 system-ui;letter-spacing:.04em;color:var(--ink);
             display:flex;align-items:center;gap:7px;cursor:pointer;background:none;border:0;padding:4px 2px}
   #ar-title .tri{color:var(--mute);transition:transform .15s;font-size:10px}
@@ -127,7 +127,7 @@
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+3da0057</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+705cc84</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
@@ -886,6 +886,8 @@ drawProg(); buildProgList();
 const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false };
 const arLane = $('ar-lane'), arRuler = $('ar-ruler'), arHead = $('ar-playhead'), arScroll = $('ar-scroll');
 function arMsg(t){ $('ar-msg').textContent = t||''; }
+// reserve exactly the arranger's real height at the page bottom so nothing clips under it
+function arFit(){ document.body.style.paddingBottom = ($('arranger').offsetHeight + 16) + 'px'; }
 function arEndBeat(){ return AR.blocks.reduce((m,b)=>Math.max(m,b.startBeat+b.lenBeats),0); }
 function fmtLen(beats){                                   // e.g. "2 bars", "1 bar + 2/4", "3/4"
   const bars=Math.floor(beats/BEATS_PER_BAR), rem=beats%BEATS_PER_BAR;
@@ -927,6 +929,7 @@ function arRender(){
       +`<span class="ar-grip" title="Drag edge to add/remove beats"></span>`;
     b.el=el; el.dataset.i=idx; arWireBlock(el,b); arLane.append(el);
   });
+  arFit();
 }
 function arAdd(cap){
   const b = Object.assign({id:++AR.seq, startBeat:arEndBeat()}, cap);
@@ -981,7 +984,7 @@ function arReflow(){
 $('ar-resize').onpointerdown=(e)=>{ e.preventDefault(); const y0=e.clientY, h0=AR.h;
   const r=$('ar-resize'); r.setPointerCapture(e.pointerId);
   const mv=(ev)=>{ AR.h=Math.min(460, Math.max(130, h0+(y0-ev.clientY)));
-                   document.documentElement.style.setProperty('--ar-h', AR.h+'px'); };
+                   document.documentElement.style.setProperty('--ar-h', AR.h+'px'); arFit(); };
   const up=()=>{ r.removeEventListener('pointermove',mv); r.removeEventListener('pointerup',up); arSave(); };
   r.addEventListener('pointermove',mv); r.addEventListener('pointerup',up);
 };
@@ -990,7 +993,7 @@ function arToggle(force){
   $('arranger').classList.toggle('open', AR.open);
   $('ar-title').setAttribute('aria-expanded', AR.open);
   document.body.classList.toggle('ar-open', AR.open);
-  if(AR.open) arRender();
+  if(AR.open) arRender(); else arFit();
 }
 $('ar-title').onclick=()=>arToggle();
 $('ar-loop').onclick=e=>{ AR.loop=!AR.loop; e.target.setAttribute('aria-pressed',AR.loop); arSave(); };
@@ -1071,5 +1074,7 @@ function arLoad(){
   }catch(e){ AR.blocks=[]; }
 }
 arLoad(); if(AR.blocks.length) arToggle(true); else arRender();
-window.addEventListener('resize', ()=>{ if(AR.open) arRender(); });
+arFit();
+window.addEventListener('resize', ()=>{ if(AR.open) arRender(); else arFit(); });
+window.addEventListener('load', arFit);
 </script>
