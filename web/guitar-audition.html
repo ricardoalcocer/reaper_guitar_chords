@@ -9,7 +9,7 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
        font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:18px 18px 64px}
-  body.ar-open{padding-bottom:var(--ar-h,150px)}
+  body.ar-open{padding-bottom:calc(var(--ar-h,190px) + 18px)}
   .wrap{max-width:760px;margin:0 auto}
   h1{font:600 15px/1 system-ui;letter-spacing:.02em;margin:0}
   .sub{color:var(--mute);font-size:12px;margin:4px 0 16px}
@@ -76,44 +76,56 @@
   }
   @media (prefers-reduced-motion:reduce){.str,.dot{transition:none}}
 
-  /* ---------- arranger strip ---------- */
+  /* ---------- arranger: a song track ---------- */
   #arranger{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--panel);
-            border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.35);
+            border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.4);
             display:flex;flex-direction:column}
   #ar-resize{height:6px;cursor:ns-resize;background:linear-gradient(var(--line),transparent);opacity:0}
   #arranger.open #ar-resize{opacity:1}
-  #ar-bar{display:flex;gap:8px;align-items:center;padding:8px 14px;flex-wrap:wrap}
+  #ar-bar{display:flex;gap:8px;align-items:center;padding:8px 14px}
   #ar-title{font:600 12px/1 system-ui;letter-spacing:.04em;color:var(--ink);
             display:flex;align-items:center;gap:7px;cursor:pointer;background:none;border:0;padding:4px 2px}
   #ar-title .tri{color:var(--mute);transition:transform .15s;font-size:10px}
   #arranger.open #ar-title .tri{transform:rotate(90deg)}
   #ar-count{color:var(--mute);font:11px var(--mono)}
-  #ar-msg{color:var(--amber);font:11px var(--mono);margin-left:2px;min-height:1em}
-  #ar-lane{display:none;position:relative;height:calc(var(--ar-h,150px) - 60px);
-           overflow-x:auto;overflow-y:hidden;
-           background:repeating-linear-gradient(90deg,#25272c,#25272c 1px,transparent 1px,transparent var(--ar-beat,64px));
-           border-top:1px solid var(--line);margin:0 8px 10px;border-radius:4px;touch-action:none}
-  #arranger.open #ar-lane{display:block}
+  #ar-msg{color:var(--amber);font:11px var(--mono);margin-left:auto;min-height:1em;text-align:right}
+  #ar-loop[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
+  /* timeline: ruler + lane scroll together */
+  #ar-scroll{display:none;overflow-x:auto;overflow-y:hidden;margin:0 8px 10px;
+             border:1px solid var(--line);border-radius:6px;background:#1c1e22;touch-action:pan-x}
+  #arranger.open #ar-scroll{display:block}
+  #ar-content{position:relative;min-width:100%;height:calc(var(--ar-h,190px) - 62px)}
+  #ar-ruler{position:relative;height:20px;border-bottom:1px solid var(--line);
+            background:#212429;font:10px var(--mono);color:var(--mute)}
+  .ar-bar-num{position:absolute;top:4px;transform:translateX(4px);pointer-events:none}
+  .ar-bar-line{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+  #ar-lane{position:absolute;left:0;right:0;top:20px;bottom:0;
+           background:repeating-linear-gradient(90deg,rgba(255,255,255,.05),rgba(255,255,255,.05) 1px,transparent 1px,transparent var(--ar-bar,90px))}
   #ar-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
             color:var(--mute);font-size:12px;pointer-events:none;padding:0 12px;text-align:center}
-  .ar-block{position:absolute;top:12px;bottom:12px;
-            background:var(--amber-dim);border:1px solid #3E6DA8;border-radius:4px;
-            color:#DCE8FB;font:600 12px var(--mono);cursor:grab;user-select:none;
-            display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0 6px;
-            box-sizing:border-box}
-  .ar-block.pow{background:#3a2f1c;border-color:#7a5a2a;color:#f0d9a8}
-  .ar-block.now{outline:2px solid var(--amber);outline-offset:-2px;background:var(--amber);color:#fff}
-  .ar-block.drag{cursor:grabbing;opacity:.9;z-index:3;box-shadow:0 3px 12px rgba(0,0,0,.4)}
-  .ar-block .ar-lbl{pointer-events:none;text-align:center;line-height:1.2}
-  .ar-block .ar-rm{position:absolute;top:0;right:4px;font:700 13px system-ui;color:#fff;opacity:.5;
-                   cursor:pointer;line-height:1.2}
-  .ar-block .ar-rm:hover{opacity:1}
-  .ar-block .ar-grip{position:absolute;top:0;bottom:0;width:9px;right:0;cursor:ew-resize}
-  .ar-block .ar-grip:hover{background:rgba(255,255,255,.15)}
+  #ar-playhead{position:absolute;top:0;bottom:0;width:2px;left:0;background:var(--ink);
+               box-shadow:0 0 6px rgba(255,255,255,.5);display:none;pointer-events:none;z-index:6}
+  #arranger.playing #ar-playhead{display:block}
+  .ar-block{position:absolute;top:8px;bottom:8px;border-radius:5px;cursor:grab;user-select:none;
+            overflow:hidden;box-sizing:border-box;border:1px solid #3E6DA8;background:var(--amber-dim,#213650)}
+  .ar-block.pow{border-color:#8a6a2e;background:#382c18}
+  .ar-block.prog{border-color:#4f8a5e;background:#1f3326}
+  .ar-block.now{outline:2px solid var(--amber);outline-offset:-2px;z-index:4}
+  .ar-block.drag{cursor:grabbing;opacity:.92;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+  .ar-seams{position:absolute;inset:0;pointer-events:none;
+            background:repeating-linear-gradient(90deg,transparent 0,transparent calc(var(--loop,90px) - 1.5px),rgba(255,255,255,.16) var(--loop,90px))}
+  .ar-lbl{position:absolute;left:9px;top:7px;font:700 13px var(--mono);color:#dce8fb;pointer-events:none}
+  .ar-block.pow .ar-lbl{color:#f0d9a8} .ar-block.prog .ar-lbl{color:#c7e8cf}
+  .ar-sub{position:absolute;left:9px;bottom:7px;font:500 10px var(--mono);color:#8fa9c8;pointer-events:none}
+  .ar-block.pow .ar-sub{color:#b79b6b} .ar-block.prog .ar-sub{color:#82ab8e}
+  .ar-rm{position:absolute;top:2px;right:5px;font:700 14px/1 system-ui;color:#fff;opacity:.45;cursor:pointer}
+  .ar-rm:hover{opacity:1}
+  .ar-grip{position:absolute;top:0;bottom:0;width:10px;right:0;cursor:ew-resize}
+  .ar-grip:hover{background:rgba(255,255,255,.16)}
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+ccc1ef0</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+bf2565e</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
@@ -136,7 +148,7 @@
         <button class="btn" id="c-up">Strum up</button>
         <button class="btn" id="c-arp">Arpeggio</button>
         <button class="btn toggle" id="c-pm" aria-pressed="false">Palm mute</button>
-        <button class="btn" id="c-add" title="Add this chord to the arranger">+ Strip</button>
+        <button class="btn" id="c-add" title="Add this chord to the arranger">+ Song</button>
       </div>
     </div>
     <div class="panel">
@@ -164,7 +176,7 @@
         <button class="btn primary" id="s-play">Play</button>
         <label class="ctl">Tempo <input type="range" id="s-bpm" min="60" max="160" value="100">
           <span id="s-bpmv" style="font-family:var(--mono);color:var(--ink)">100</span></label>
-        <button class="btn" id="s-add" title="Add this strum pattern to the arranger">+ Strip</button>
+        <button class="btn" id="s-add" title="Add this strum pattern to the arranger">+ Song</button>
       </div>
     </div>
     <div class="panel">
@@ -187,7 +199,7 @@
         <button class="btn toggle" id="p-drive" aria-pressed="true">Drive</button>
         <label class="ctl">Tempo <input type="range" id="p-bpm" min="80" max="200" value="120">
           <span id="p-bpmv" style="font-family:var(--mono);color:var(--ink)">120</span></label>
-        <button class="btn" id="p-add" title="Add this power-chord riff to the arranger">+ Strip</button>
+        <button class="btn" id="p-add" title="Add this power-chord riff to the arranger">+ Song</button>
       </div>
     </div>
     <div class="panel">
@@ -208,7 +220,7 @@
         <button class="btn primary" id="pg-play">Play</button>
         <label class="ctl">Tempo <input type="range" id="pg-bpm" min="60" max="200" value="100">
           <span id="pg-bpmv" style="font-family:var(--mono);color:var(--ink)">100</span></label>
-        <button class="btn" id="pg-add" title="Add every chord of this progression to the arranger">+ Strip</button>
+        <button class="btn" id="pg-add" title="Add every chord of this progression to the arranger">+ Song</button>
       </div>
     </div>
     <div class="panel">
@@ -228,20 +240,27 @@
     voicings, same stroke directions, same note lengths.</p>
 </div>
 
-<!-- ARRANGER STRIP -->
+<!-- ARRANGER: SONG TRACK -->
 <div id="arranger">
   <div id="ar-resize" title="Drag to resize the arranger"></div>
   <div id="ar-bar">
-    <button id="ar-title" aria-expanded="false"><span class="tri">&#9654;</span> Arranger <span id="ar-count">(0)</span></button>
+    <button id="ar-title" aria-expanded="false"><span class="tri">&#9654;</span> Song <span id="ar-count">(0 bars)</span></button>
     <button class="btn primary" id="ar-play">Play</button>
+    <button class="btn toggle" id="ar-loop" aria-pressed="false">Loop</button>
     <button class="btn" id="ar-export">Export MIDI</button>
     <button class="btn" id="ar-clear">Clear</button>
     <label class="ctl">Tempo <input type="range" id="ar-bpm" min="60" max="200" value="120">
       <span id="ar-bpmv" style="font-family:var(--mono);color:var(--ink)">120</span></label>
     <span id="ar-msg" role="status" aria-live="polite"></span>
   </div>
-  <div id="ar-lane">
-    <div id="ar-empty">Audition a chord, power chord, or pattern, then press &ldquo;+ Strip&rdquo; to drop it here.</div>
+  <div id="ar-scroll">
+    <div id="ar-content">
+      <div id="ar-ruler"></div>
+      <div id="ar-lane">
+        <div id="ar-playhead"></div>
+        <div id="ar-empty">Audition a strum, power riff, or progression, then press &ldquo;+ Song&rdquo; to stack it here as a loop.</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -502,41 +521,58 @@ function blockFrets(b){
   return b.source==='power' ? powerChord(b.root, b.three) : CHORDS[b.root][b.quality].frets;
 }
 function blockLabel(b){
-  return b.source==='power' ? b.root+'5' : CHORDS[b.root][b.quality].label;
+  if(b.source==='power') return b.root+'5';
+  if(b.source==='prog')  return b.name || b.chords.map(c=>CHORDS[c.root][c.quality].label).join(' ');
+  return CHORDS[b.root][b.quality].label;
 }
-// natural content length in beats, before any user stretch
-function blockNatural(b){
-  if(b.kind==='chord') return 2;                          // a captured chord defaults to 2 beats
-  if(b.source==='strum') return 4;                        // 8 slots × ½ beat
-  const pp=POWER_PATS[b.patternId]; return pp.p.length/pp.div;
+
+/* ---- the song model: every block is a MIDI loop of whole bars ----
+   A block plays for b.bars bars. Its content is one loop (blockLoopStrokes) spanning
+   blockLoopBars bars; stretching the block REPEATS that loop to fill the extra bars —
+   more notes, same tempo. This is the EZbass Song-Track model: you stack loops. */
+const BEATS_PER_BAR = 4;                                  // 4/4 throughout
+function blockLoopBars(b){
+  if(b.source==='prog')  return b.chords.length;          // one chord per bar
+  if(b.source==='power'){ const pp=POWER_PATS[b.patternId];
+                          return Math.max(1, Math.round((pp.p.length/pp.div)/BEATS_PER_BAR)); }
+  return 1;                                               // strum / chord = a one-bar loop
 }
-// the strums a block emits over its (possibly stretched) length: {atBeat, kind, drive}.
-// A chord is one strum. A pattern LOOPS its groove at natural tempo to fill lengthBeats —
-// stretching adds repeats, shrinking truncates (EZbass-style), it does not time-scale.
-function blockStrokes(b){
-  if(b.kind==='chord') return [{atBeat:0, kind:b.palmMute?'P':'D', drive:false}];
-  const L=b.lengthBeats, EPS=1e-9, out=[];
-  if(b.source==='strum'){
-    const pat=STRUM_PATS[b.patternId], slot=0.5, loop=pat.length*slot;
-    for(let base=0; base<L-EPS; base+=loop)
-      pat.forEach((k,i)=>{ const at=base+i*slot; if(k && at<L-EPS) out.push({atBeat:at, kind:k, drive:false}); });
+// the strums of ONE loop iteration: {atBeat (0..loopBars×4), kind, drive, frets}
+function blockLoopStrokes(b){
+  const out=[];
+  if(b.source==='power'){
+    const pp=POWER_PATS[b.patternId], slot=1/pp.div, frets=powerChord(b.root, b.three);
+    pp.p.forEach((k,i)=>{ if(k) out.push({atBeat:i*slot, kind:k, drive:!!b.drive, frets}); });
     return out;
   }
-  const pp=POWER_PATS[b.patternId], slot=1/pp.div, loop=pp.p.length*slot;
-  for(let base=0; base<L-EPS; base+=loop)
-    pp.p.forEach((k,i)=>{ const at=base+i*slot; if(k && at<L-EPS) out.push({atBeat:at, kind:k, drive:!!b.drive}); });
+  if(b.source==='prog'){                                  // a strum pattern, one chord per bar
+    const pat=STRUM_PATS[b.patternId], slot=0.5;
+    b.chords.forEach((c,bar)=>{ const frets=CHORDS[c.root][c.quality].frets;
+      pat.forEach((k,i)=>{ if(k) out.push({atBeat:bar*BEATS_PER_BAR+i*slot, kind:k, drive:false, frets}); }); });
+    return out;
+  }
+  const pat=STRUM_PATS[b.patternId], slot=0.5, frets=CHORDS[b.root][b.quality].frets;
+  pat.forEach((k,i)=>{ if(k) out.push({atBeat:i*slot, kind:k, drive:false, frets}); });
   return out;
 }
-// note events of a block, honoring its length: {si, midi, startBeat, endBeat, vel, art}.
-// A chord block SUSTAINS to its end (stretch => longer notes); pattern hits ring by
-// articulation. No note sounds past the block end or past the next hit on the same string.
+// tile the loop across the block's region (b.bars): stretching repeats it, shrinking truncates
+function blockStrokes(b){
+  const loopBeats=blockLoopBars(b)*BEATS_PER_BAR, regionBeats=b.bars*BEATS_PER_BAR, EPS=1e-9;
+  const loop=blockLoopStrokes(b), out=[];
+  for(let base=0; base<regionBeats-EPS; base+=loopBeats)
+    loop.forEach(s=>{ const at=base+s.atBeat;
+      if(at<regionBeats-EPS) out.push({atBeat:at, kind:s.kind, drive:s.drive, frets:s.frets}); });
+  return out;
+}
+// note events of a block: {si, midi, startBeat, endBeat, vel, art}. Notes ring by articulation
+// exactly as when auditioned, never overlapping the next hit on the same string. Stretching a
+// block adds more notes (repeats), it never lengthens a note.
 function blockNoteEvents(b, bpm){
-  const frets = blockFrets(b), L=b.lengthBeats, secPerBeat=60/(bpm||120), out=[];
+  const secPerBeat=60/(bpm||120), out=[];
   blockStrokes(b).forEach(s=>{
-    strokeEvents(frets, s.kind).forEach(e=>{
+    strokeEvents(s.frets, s.kind).forEach(e=>{
       const startBeat=s.atBeat+e.offBeat;
-      const ringBeats = b.kind==='chord' ? L : ART_SECONDS[e.art]/secPerBeat;
-      out.push({si:e.si, midi:e.midi, startBeat, endBeat:Math.min(L, startBeat+ringBeats), vel:e.vel, art:e.art});
+      out.push({si:e.si, midi:e.midi, startBeat, endBeat:startBeat+ART_SECONDS[e.art]/secPerBeat, vel:e.vel, art:e.art});
     });
   });
   const byS={}; out.forEach(n=>{ (byS[n.si]=byS[n.si]||[]).push(n); });
@@ -560,9 +596,10 @@ function arrangeToMidi(strip){
   const bpm = strip.bpm||120;
   let notes=[];                                           // {startTick,endTick,midi,vel,si}
   blocks.forEach(b=>{
+    const base = b.startBar*BEATS_PER_BAR;                // block position, in beats
     blockNoteEvents(b, bpm).forEach(e=>{
-      const startTick = Math.round((b.startBeat + e.startBeat)*TPQ);
-      const endTick = Math.max(startTick+1, Math.round((b.startBeat + e.endBeat)*TPQ));
+      const startTick = Math.round((base + e.startBeat)*TPQ);
+      const endTick = Math.max(startTick+1, Math.round((base + e.endBeat)*TPQ));
       notes.push({startTick, endTick, midi:e.midi, vel:e.vel, si:e.si});
     });
   });
@@ -840,62 +877,74 @@ document.addEventListener('keydown',e=>{
 drawChords(); drawStrum(); buildStrumPats(); drawPower(); buildPowerPats();
 drawProg(); buildProgList();
 
-/* ==================== ARRANGER UI (DOM) ==================== */
-const AR = { blocks:[], bpm:120, grid:0.25, program:25, px:64, h:150, seq:0, open:false };
-const arLane = $('ar-lane');
+/* ==================== ARRANGER: SONG TRACK (DOM) ==================== */
+const AR = { blocks:[], bpm:120, program:25, pxPerBar:96, h:190, seq:0, open:false, loop:false };
+const arLane = $('ar-lane'), arRuler = $('ar-ruler'), arHead = $('ar-playhead'), arScroll = $('ar-scroll');
 function arMsg(t){ $('ar-msg').textContent = t||''; }
-function arQuant(beat){ return Math.max(0, Math.round(beat/AR.grid)*AR.grid); }
-function arTotal(){ return AR.blocks.reduce((m,b)=>Math.max(m,b.startBeat+b.lengthBeats),0); }
+function arEndBar(){ return AR.blocks.reduce((m,b)=>Math.max(m,b.startBar+b.bars),0); }
+function pluralBars(n){ return n+' bar'+(n===1?'':'s'); }
 
 function arRender(){
-  $('ar-count').textContent = `(${AR.blocks.length})`;
+  const end=arEndBar(), px=AR.pxPerBar;
+  $('ar-count').textContent = `(${pluralBars(end)})`;
   document.documentElement.style.setProperty('--ar-h', AR.h+'px');
-  document.documentElement.style.setProperty('--ar-beat', AR.px+'px');
+  document.documentElement.style.setProperty('--ar-bar', px+'px');
+  const spanBars = Math.max(end+4, Math.ceil((arScroll.clientWidth||600)/px));
+  $('ar-content').style.width = (spanBars*px)+'px';
   $('ar-empty').style.display = AR.blocks.length ? 'none' : 'flex';
+  // ruler
+  arRuler.innerHTML='';
+  for(let i=0;i<=spanBars;i++){
+    const line=document.createElement('div'); line.className='ar-bar-line'; line.style.left=(i*px)+'px'; arRuler.append(line);
+    if(i<spanBars){ const num=document.createElement('div'); num.className='ar-bar-num'; num.style.left=(i*px)+'px'; num.textContent=(i+1); arRuler.append(num); }
+  }
+  // blocks
   [...arLane.querySelectorAll('.ar-block')].forEach(e=>e.remove());
-  arLane.style.minWidth = Math.max(0,(arTotal()+2)*AR.px)+'px';
   AR.blocks.forEach((b,idx)=>{
+    const cls = b.source==='power'?' pow' : b.source==='prog'?' prog' : '';
+    const lb=blockLoopBars(b), reps=b.bars/lb;
+    const sub = pluralBars(b.bars) + (reps>1 && Number.isInteger(reps) ? ` · loop ×${reps}` : '');
     const el=document.createElement('div');
-    el.className='ar-block'+(b.source==='power'?' pow':'');
-    el.style.left=(b.startBeat*AR.px)+'px';
-    el.style.width=Math.max(10,(b.lengthBeats*AR.px-2))+'px';
-    el.innerHTML=`<span class="ar-lbl">${blockLabel(b)}</span>`
-      +`<span class="ar-rm" title="Remove">&times;</span><span class="ar-grip" title="Drag to resize"></span>`;
+    el.className='ar-block'+cls;
+    el.style.left=(b.startBar*px)+'px';
+    el.style.width=Math.max(24,(b.bars*px-2))+'px';
+    el.style.setProperty('--loop',(lb*px)+'px');
+    el.innerHTML=`<span class="ar-seams"></span><span class="ar-lbl">${blockLabel(b)}</span>`
+      +`<span class="ar-sub">${sub}</span><span class="ar-rm" title="Remove">&times;</span>`
+      +`<span class="ar-grip" title="Drag edge to add/remove bars"></span>`;
     b.el=el; el.dataset.i=idx; arWireBlock(el,b); arLane.append(el);
   });
 }
 function arAdd(cap){
-  const b = Object.assign({id:++AR.seq, startBeat:arQuant(arTotal())}, cap);
-  b.lengthBeats = cap.lengthBeats || blockNatural(b);
+  const b = Object.assign({id:++AR.seq, startBar:arEndBar()}, cap);
+  b.bars = blockLoopBars(b);
   AR.blocks.push(b); arRender(); arSave();
-  arMsg(`Added ${blockLabel(b)}`);
+  arMsg(`Added ${blockLabel(b)} — ${pluralBars(b.bars)}`);
   if(!AR.open) arToggle(true);
 }
-/* capture the current audition state of each tab */
-function capChord(){ return {kind:'chord', source:'chords', root:cRoot, quality:cQual, palmMute:cPM}; }
-function capStrum(){ const [r,q]=SC[sChord]; return {kind:'pattern', source:'strum', root:r, quality:q, patternId:sPat}; }
-function capPower(){ return {kind:'pattern', source:'power', root:pRoot, three:pThree, drive:pDrive, patternId:pPat}; }
-function addProg(){
-  const p=currentProg(); if(!p){ arMsg('No progression selected.'); return; }
-  const cs=progChords(p);
-  cs.forEach(c=> arAdd({kind:'chord', source:'chords', root:c.root, quality:c.q, palmMute:false}));
-  arMsg(`Added ${cs.length} chords from ${p.name||pgMood}`);
-}
+/* capture the current audition of each tab as a loop */
+function capChord(){ return {source:'chord', root:cRoot, quality:cQual, patternId:'downs'}; }  // chord => a 1-bar strum loop
+function capStrum(){ const [r,q]=SC[sChord]; return {source:'strum', root:r, quality:q, patternId:sPat}; }
+function capPower(){ return {source:'power', root:pRoot, three:pThree, drive:pDrive, patternId:pPat}; }
+function capProg(){ const p=currentProg(); if(!p) return null;
+  return {source:'prog', chords:progChords(p).map(c=>({root:c.root, quality:c.q})), name:p.name||null, patternId:pgPat}; }
 $('c-add').onclick=()=>arAdd(capChord());
 $('s-add').onclick=()=>arAdd(capStrum());
 $('p-add').onclick=()=>arAdd(capPower());
-$('pg-add').onclick=addProg;
+$('pg-add').onclick=()=>{ const c=capProg(); if(c) arAdd(c); else arMsg('No progression selected.'); };
 
-/* per-block drag (reposition), edge-resize, and remove */
+/* per-block drag (reposition, snap to bar), edge-resize (add/remove whole bars), remove */
 function arWireBlock(el,b){
-  const paint=()=>{ el.style.left=(b.startBeat*AR.px)+'px';
-                    el.style.width=Math.max(10,(b.lengthBeats*AR.px-2))+'px'; };
+  const px=()=>AR.pxPerBar;
+  const paint=()=>{ el.style.left=(b.startBar*px())+'px'; el.style.width=Math.max(24,(b.bars*px()-2))+'px'; };
   el.querySelector('.ar-rm').onclick=(e)=>{ e.stopPropagation();
     AR.blocks=AR.blocks.filter(x=>x!==b); arRender(); arSave(); arMsg('Removed a block.'); };
   const grip=el.querySelector('.ar-grip');
   grip.onpointerdown=(e)=>{ e.stopPropagation(); e.preventDefault();
-    const x0=e.clientX, len0=b.lengthBeats; grip.setPointerCapture(e.pointerId);
-    const mv=(ev)=>{ b.lengthBeats=Math.max(AR.grid, arQuant(len0+(ev.clientX-x0)/AR.px)); paint(); };
+    const x0=e.clientX, bars0=b.bars; grip.setPointerCapture(e.pointerId);
+    const mv=(ev)=>{ b.bars=Math.max(1, bars0+Math.round((ev.clientX-x0)/px())); paint();
+                     const r=b.bars/blockLoopBars(b);
+                     el.querySelector('.ar-sub').textContent=pluralBars(b.bars)+(r>1&&Number.isInteger(r)?` · loop ×${r}`:''); };
     const up=()=>{ grip.removeEventListener('pointermove',mv); grip.removeEventListener('pointerup',up);
                    arReflow(); arRender(); arSave(); };
     grip.addEventListener('pointermove',mv); grip.addEventListener('pointerup',up);
@@ -903,23 +952,23 @@ function arWireBlock(el,b){
   el.onpointerdown=(e)=>{
     if(e.target.classList.contains('ar-grip')||e.target.classList.contains('ar-rm')) return;
     e.preventDefault(); el.classList.add('drag'); el.setPointerCapture(e.pointerId);
-    const x0=e.clientX, beat0=b.startBeat;
-    const mv=(ev)=>{ b.startBeat=Math.max(0, arQuant(beat0+(ev.clientX-x0)/AR.px)); paint(); };
+    const x0=e.clientX, bar0=b.startBar;
+    const mv=(ev)=>{ b.startBar=Math.max(0, bar0+Math.round((ev.clientX-x0)/px())); el.style.left=(b.startBar*px())+'px'; };
     const up=()=>{ el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up);
                    el.classList.remove('drag'); arReflow(); arRender(); arSave(); };
     el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up);
   };
 }
-/* keep blocks on the single lane disjoint and in timeline order (FR-009) */
+/* keep blocks tiled end to end in bar order, no overlap */
 function arReflow(){
-  AR.blocks.sort((a,b)=> a.startBeat-b.startBeat || a.id-b.id);
+  AR.blocks.sort((a,b)=> a.startBar-b.startBar || a.id-b.id);
   let cursor=0;
-  AR.blocks.forEach(b=>{ if(b.startBeat<cursor) b.startBeat=cursor; cursor=b.startBeat+b.lengthBeats; });
+  AR.blocks.forEach(b=>{ if(b.startBar<cursor) b.startBar=cursor; cursor=b.startBar+b.bars; });
 }
-/* strip resize (whole area height) */
+/* resize the whole song track vertically */
 $('ar-resize').onpointerdown=(e)=>{ e.preventDefault(); const y0=e.clientY, h0=AR.h;
   const r=$('ar-resize'); r.setPointerCapture(e.pointerId);
-  const mv=(ev)=>{ AR.h=Math.min(440, Math.max(96, h0+(y0-ev.clientY)));
+  const mv=(ev)=>{ AR.h=Math.min(460, Math.max(130, h0+(y0-ev.clientY)));
                    document.documentElement.style.setProperty('--ar-h', AR.h+'px'); };
   const up=()=>{ r.removeEventListener('pointermove',mv); r.removeEventListener('pointerup',up); arSave(); };
   r.addEventListener('pointermove',mv); r.addEventListener('pointerup',up);
@@ -929,68 +978,86 @@ function arToggle(force){
   $('arranger').classList.toggle('open', AR.open);
   $('ar-title').setAttribute('aria-expanded', AR.open);
   document.body.classList.toggle('ar-open', AR.open);
+  if(AR.open) arRender();
 }
 $('ar-title').onclick=()=>arToggle();
+$('ar-loop').onclick=e=>{ AR.loop=!AR.loop; e.target.setAttribute('aria-pressed',AR.loop); arSave(); };
 $('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; AR.blocks=[]; arRender(); arSave(); arMsg('Cleared.'); };
 
-/* play the strip in sequence through the existing transport. Notes come from the same
-   blockNoteEvents() the exporter uses, each carrying its own end — so playback honors block
-   length (chords sustain/cut, patterns loop) exactly as the MIDI will. */
+/* play the whole song through the existing transport; a playhead sweeps the bars */
 function arPlay(){
   if(T){ stopAll(); return; }
-  if(!AR.blocks.length){ arMsg('Strip is empty — nothing to play.'); return; }
-  const spb=60/AR.bpm, endBeat=arTotal(), notes=[];
+  if(!AR.blocks.length){ arMsg('The song is empty — add a loop first.'); return; }
+  const spb=60/AR.bpm, songBeats=arEndBar()*BEATS_PER_BAR, notes=[];
   AR.blocks.forEach((b,idx)=>{
-    const drive = b.source==='power' && !!b.drive;
+    const base=b.startBar*BEATS_PER_BAR;
     blockNoteEvents(b, AR.bpm).forEach(e=> notes.push({
-      startBeat:b.startBeat+e.startBeat, endBeat:b.startBeat+e.endBeat,
-      midi:e.midi, vel:e.vel, art:e.art, si:e.si, drive, idx })); });
+      startBeat:base+e.startBeat, endBeat:base+e.endBeat,
+      midi:e.midi, vel:e.vel, art:e.art, si:e.si, drive:!!(b.source==='power'&&b.drive), idx })); });
   notes.sort((a,b)=>a.startBeat-b.startBeat);
   if(!notes.length){ arMsg('Nothing to play.'); return; }
-  const cells=AR.blocks.map(b=>b.el);
-  arMsg('Playing…');
+  const cells=AR.blocks.map(b=>b.el), total=notes.length;
+  arMsg(AR.loop?'Playing (looping)…':'Playing…');
+  $('arranger').classList.add('playing');
+  const t0 = (audio(), ctx.currentTime + .12);            // matches start()'s look-ahead
   start($('ar-play'), cells, (i,when)=>{
-    if(i>=notes.length){
-      setTimeout(()=>{ if(T&&T.btn===$('ar-play')){ stopAll(); arMsg(''); } },
+    if(!AR.loop && i>=total){
+      setTimeout(()=>{ if(T&&T.btn===$('ar-play')){ stopAll(); } },
                  Math.max(0,(when-ctx.currentTime))*1000+400);
       return {slot:-1, dur:1};
     }
-    const n=notes[i];
+    const k=i%total, n=notes[k];
     play(n.midi, when, n.vel, n.art, n.drive, n.si, when+Math.max(0.02,(n.endBeat-n.startBeat)*spb));
-    const dur=((i+1<notes.length?notes[i+1].startBeat:Math.max(n.startBeat+0.25,endBeat))-n.startBeat)*spb;
-    return {slot:n.idx, dur:Math.max(0.005,dur)};
+    const gap = (k+1<total) ? notes[k+1].startBeat-n.startBeat
+                            : (songBeats-n.startBeat)+(AR.loop?notes[0].startBeat:0.25);
+    return {slot:n.idx, dur:Math.max(0.005, gap*spb)};
   });
+  arSweep(t0, songBeats, spb);
+}
+function arSweep(t0, songBeats, spb){
+  const px=AR.pxPerBar/BEATS_PER_BAR;                      // px per beat
+  const step=()=>{
+    if(!T || T.btn!==$('ar-play')){ $('arranger').classList.remove('playing'); arMsg(''); return; }
+    let beat=(ctx.currentTime-t0)/spb; if(beat<0) beat=0;
+    if(AR.loop && songBeats>0) beat%=songBeats;
+    const x=beat*px; arHead.style.left=x+'px';
+    if(x < arScroll.scrollLeft+20 || x > arScroll.scrollLeft+arScroll.clientWidth-40)
+      arScroll.scrollLeft = Math.max(0, x - arScroll.clientWidth*0.4);
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 $('ar-play').onclick=arPlay;
 
-/* export the strip as a downloadable .mid */
+/* export the whole song as a downloadable .mid */
 function arExport(){
   const bytes=arrangeToMidi(AR);
-  if(!bytes){ arMsg('Strip is empty — nothing to export.'); return; }
+  if(!bytes){ arMsg('The song is empty — nothing to export.'); return; }
   const url=URL.createObjectURL(new Blob([bytes], {type:'audio/midi'}));
-  const a=document.createElement('a'); a.href=url; a.download='arrangement.mid';
+  const a=document.createElement('a'); a.href=url; a.download='song.mid';
   document.body.append(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
-  arMsg(`Exported a ${AR.blocks.length}-block arrangement.`);
+  arMsg(`Exported ${pluralBars(arEndBar())} of MIDI.`);
 }
 $('ar-export').onclick=arExport;
 $('ar-bpm').oninput=e=>{ AR.bpm=+e.target.value; $('ar-bpmv').textContent=e.target.value; arSave(); };
 
-/* persistence — first localStorage use in the tool; secondary, guarded (research R7) */
+/* persistence — guarded localStorage */
 function arSave(){
   try{ localStorage.setItem('gcp-arranger', JSON.stringify({
-    blocks:AR.blocks.map(b=>({kind:b.kind,source:b.source,root:b.root,quality:b.quality,
-      patternId:b.patternId,palmMute:!!b.palmMute,three:!!b.three,drive:!!b.drive,
-      startBeat:b.startBeat,lengthBeats:b.lengthBeats})),
-    bpm:AR.bpm, program:AR.program, h:AR.h })); }catch(e){}
+    blocks:AR.blocks.map(b=>({source:b.source,root:b.root,quality:b.quality,three:!!b.three,
+      drive:!!b.drive,patternId:b.patternId,chords:b.chords,name:b.name,startBar:b.startBar,bars:b.bars})),
+    bpm:AR.bpm, program:AR.program, h:AR.h, loop:AR.loop })); }catch(e){}
 }
 function arLoad(){
   try{ const s=JSON.parse(localStorage.getItem('gcp-arranger')); if(!s) return;
-    AR.bpm=s.bpm||120; AR.program=s.program||25; AR.h=s.h||150;
+    AR.bpm=s.bpm||120; AR.program=s.program||25; AR.h=s.h||190; AR.loop=!!s.loop;
     AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
-      .filter(b=>{ try{ blockFrets(b); return true; }catch(e){ return false; } });
+      .filter(b=>{ try{ blockLoopStrokes(b); return b.bars>=1; }catch(e){ return false; } });
     $('ar-bpm').value=AR.bpm; $('ar-bpmv').textContent=AR.bpm;
+    $('ar-loop').setAttribute('aria-pressed', AR.loop);
   }catch(e){ AR.blocks=[]; }
 }
-arLoad(); arRender(); if(AR.blocks.length) arToggle(true);
+arLoad(); if(AR.blocks.length) arToggle(true); else arRender();
+window.addEventListener('resize', ()=>{ if(AR.open) arRender(); });
 </script>
