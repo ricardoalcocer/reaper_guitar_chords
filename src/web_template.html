@@ -378,7 +378,7 @@ function buffer(midi, dur, damp, bright){
   }
   cache.set(key, buf); return buf;
 }
-function play(midi, when, vel, kind, drive, voice){
+function play(midi, when, vel, kind, drive, voice, stopAt){
   audio();
   if(voice!==undefined && voices.has(voice)){          // a re-struck string cuts the old note
     const o = voices.get(voice), t = Math.max(when, ctx.currentTime);
@@ -395,6 +395,11 @@ function play(midi, when, vel, kind, drive, voice){
   const g = ctx.createGain(); g.gain.value = (vel/127) * (ghost? .5 : .9);
   src.connect(g); g.connect(drive ? driveBus : dry);
   src.start(Math.max(when, ctx.currentTime));
+  if(stopAt!==undefined){                              // arranger: cut the note at the block's end
+    const off = Math.max(stopAt, Math.max(when, ctx.currentTime)+.03);
+    try{ g.gain.setValueAtTime(g.gain.value, Math.max(off-.03, ctx.currentTime));
+         g.gain.linearRampToValueAtTime(0, off); src.stop(off+.02); }catch(e){}
+  }
   if(voice!==undefined){ voices.set(voice, {g, src});
     src.onended = ()=>{ if(voices.get(voice) && voices.get(voice).src===src) voices.delete(voice); }; }
 }
@@ -501,30 +506,42 @@ function blockLabel(b){
 }
 // natural content length in beats, before any user stretch
 function blockNatural(b){
-  if(b.kind==='chord') return 1;
+  if(b.kind==='chord') return 2;                          // a captured chord defaults to 2 beats
   if(b.source==='strum') return 4;                        // 8 slots × ½ beat
   const pp=POWER_PATS[b.patternId]; return pp.p.length/pp.div;
 }
-// the strums a block emits: {atBeat (relative to block start), kind, drive}
+// the strums a block emits over its (possibly stretched) length: {atBeat, kind, drive}.
+// A chord is one strum. A pattern LOOPS its groove at natural tempo to fill lengthBeats —
+// stretching adds repeats, shrinking truncates (EZbass-style), it does not time-scale.
 function blockStrokes(b){
-  const scale = b.lengthBeats / blockNatural(b);
   if(b.kind==='chord') return [{atBeat:0, kind:b.palmMute?'P':'D', drive:false}];
+  const L=b.lengthBeats, EPS=1e-9, out=[];
   if(b.source==='strum'){
-    const out=[]; STRUM_PATS[b.patternId].forEach((k,i)=>{ if(k) out.push({atBeat:i*0.5*scale, kind:k, drive:false}); });
+    const pat=STRUM_PATS[b.patternId], slot=0.5, loop=pat.length*slot;
+    for(let base=0; base<L-EPS; base+=loop)
+      pat.forEach((k,i)=>{ const at=base+i*slot; if(k && at<L-EPS) out.push({atBeat:at, kind:k, drive:false}); });
     return out;
   }
-  const pp=POWER_PATS[b.patternId], out=[];
-  pp.p.forEach((k,i)=>{ if(k) out.push({atBeat:(i/pp.div)*scale, kind:k, drive:!!b.drive}); });
+  const pp=POWER_PATS[b.patternId], slot=1/pp.div, loop=pp.p.length*slot;
+  for(let base=0; base<L-EPS; base+=loop)
+    pp.p.forEach((k,i)=>{ const at=base+i*slot; if(k && at<L-EPS) out.push({atBeat:at, kind:k, drive:!!b.drive}); });
   return out;
 }
-// flat note events of a block: {si, midi, startBeat (relative to block start), vel, art}
-function blockNoteEvents(b){
-  const frets = blockFrets(b), out=[];
+// note events of a block, honoring its length: {si, midi, startBeat, endBeat, vel, art}.
+// A chord block SUSTAINS to its end (stretch => longer notes); pattern hits ring by
+// articulation. No note sounds past the block end or past the next hit on the same string.
+function blockNoteEvents(b, bpm){
+  const frets = blockFrets(b), L=b.lengthBeats, secPerBeat=60/(bpm||120), out=[];
   blockStrokes(b).forEach(s=>{
     strokeEvents(frets, s.kind).forEach(e=>{
-      out.push({si:e.si, midi:e.midi, startBeat:s.atBeat + e.offBeat, vel:e.vel, art:e.art});
+      const startBeat=s.atBeat+e.offBeat;
+      const ringBeats = b.kind==='chord' ? L : ART_SECONDS[e.art]/secPerBeat;
+      out.push({si:e.si, midi:e.midi, startBeat, endBeat:Math.min(L, startBeat+ringBeats), vel:e.vel, art:e.art});
     });
   });
+  const byS={}; out.forEach(n=>{ (byS[n.si]=byS[n.si]||[]).push(n); });
+  Object.keys(byS).forEach(k=>{ const l=byS[k].sort((a,b)=>a.startBeat-b.startBeat);
+    for(let i=0;i<l.length-1;i++) if(l[i].endBeat>l[i+1].startBeat) l[i].endBeat=l[i+1].startBeat; });
   return out;
 }
 
@@ -540,16 +557,16 @@ function u32(n){ return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255]; }
 function arrangeToMidi(strip){
   const blocks = strip.blocks;
   if(!blocks || !blocks.length) return null;              // nothing to export (FR-015)
-  const bpm = strip.bpm||120, secPerBeat = 60/bpm;
+  const bpm = strip.bpm||120;
   let notes=[];                                           // {startTick,endTick,midi,vel,si}
   blocks.forEach(b=>{
-    blockNoteEvents(b).forEach(e=>{
+    blockNoteEvents(b, bpm).forEach(e=>{
       const startTick = Math.round((b.startBeat + e.startBeat)*TPQ);
-      const ringTicks = Math.max(1, Math.round((ART_SECONDS[e.art]/secPerBeat)*TPQ));
-      notes.push({startTick, endTick:startTick+ringTicks, midi:e.midi, vel:e.vel, si:e.si});
+      const endTick = Math.max(startTick+1, Math.round((b.startBeat + e.endBeat)*TPQ));
+      notes.push({startTick, endTick, midi:e.midi, vel:e.vel, si:e.si});
     });
   });
-  // clamp each note so it never overlaps the next hit on the SAME string (test_events invariant)
+  // clamp so a note never overlaps the next hit on the SAME string across block boundaries too
   const byString={};
   notes.forEach(n=>{ (byString[n.si]=byString[n.si]||[]).push(n); });
   Object.keys(byString).forEach(k=>{
@@ -916,27 +933,32 @@ function arToggle(force){
 $('ar-title').onclick=()=>arToggle();
 $('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; AR.blocks=[]; arRender(); arSave(); arMsg('Cleared.'); };
 
-/* play the strip in sequence through the existing transport */
+/* play the strip in sequence through the existing transport. Notes come from the same
+   blockNoteEvents() the exporter uses, each carrying its own end — so playback honors block
+   length (chords sustain/cut, patterns loop) exactly as the MIDI will. */
 function arPlay(){
   if(T){ stopAll(); return; }
   if(!AR.blocks.length){ arMsg('Strip is empty — nothing to play.'); return; }
-  const spb=60/AR.bpm, endBeat=arTotal(), hits=[];
-  AR.blocks.forEach((b,idx)=>{ const frets=blockFrets(b);
-    blockStrokes(b).forEach(s=> hits.push({beat:b.startBeat+s.atBeat, frets, kind:s.kind, drive:s.drive, idx})); });
-  hits.sort((a,b)=>a.beat-b.beat);
-  if(!hits.length){ arMsg('Nothing to play.'); return; }
+  const spb=60/AR.bpm, endBeat=arTotal(), notes=[];
+  AR.blocks.forEach((b,idx)=>{
+    const drive = b.source==='power' && !!b.drive;
+    blockNoteEvents(b, AR.bpm).forEach(e=> notes.push({
+      startBeat:b.startBeat+e.startBeat, endBeat:b.startBeat+e.endBeat,
+      midi:e.midi, vel:e.vel, art:e.art, si:e.si, drive, idx })); });
+  notes.sort((a,b)=>a.startBeat-b.startBeat);
+  if(!notes.length){ arMsg('Nothing to play.'); return; }
   const cells=AR.blocks.map(b=>b.el);
   arMsg('Playing…');
   start($('ar-play'), cells, (i,when)=>{
-    if(i>=hits.length){
+    if(i>=notes.length){
       setTimeout(()=>{ if(T&&T.btn===$('ar-play')){ stopAll(); arMsg(''); } },
-                 Math.max(0,(when-ctx.currentTime))*1000+1600);
+                 Math.max(0,(when-ctx.currentTime))*1000+400);
       return {slot:-1, dur:1};
     }
-    const h=hits[i];
-    stroke(h.frets, h.kind, when, spb, h.drive, null);
-    const dur=((i+1<hits.length?hits[i+1].beat:Math.max(h.beat+0.5,endBeat))-h.beat)*spb;
-    return {slot:h.idx, dur:Math.max(0.03,dur)};
+    const n=notes[i];
+    play(n.midi, when, n.vel, n.art, n.drive, n.si, when+Math.max(0.02,(n.endBeat-n.startBeat)*spb));
+    const dur=((i+1<notes.length?notes[i+1].startBeat:Math.max(n.startBeat+0.25,endBeat))-n.startBeat)*spb;
+    return {slot:n.idx, dur:Math.max(0.005,dur)};
   });
 }
 $('ar-play').onclick=arPlay;

@@ -108,7 +108,37 @@ function parseSMF(bytes){
   ok(overlaps === 0, `no two notes overlap on the same string (found ${overlaps})`);
 }
 
-// ---------- Test 4: empty strip exports nothing (FR-015) ----------
+// ---------- Test 4: stretching a CHORD block lengthens its MIDI notes (US2 scenario 2) ----------
+{
+  const dur = (L)=>{
+    const m = parseSMF(arrangeToMidi({ bpm:120, blocks:[
+      { kind:'chord', source:'chords', root:'C', quality:'maj', palmMute:false, startBeat:0, lengthBeats:L } ] }));
+    // pair each note-on with its matching note-off; return the max note length in ticks
+    const byMidi={}; m.ons.forEach(o=>{(byMidi[o.midi]=byMidi[o.midi]||[]).push({on:o.tick});});
+    m.offs.forEach(f=>{ const l=byMidi[f.midi]; if(!l) return;
+      const open=l.filter(x=>x.off===undefined && x.on<=f.tick).sort((a,b)=>b.on-a.on)[0]; if(open) open.off=f.tick; });
+    let max=0; Object.values(byMidi).forEach(l=>l.forEach(x=>{ if(x.off!==undefined) max=Math.max(max,x.off-x.on); }));
+    return max;
+  };
+  const d2=dur(2), d4=dur(4);
+  ok(d4 > d2 + 400, `a wider chord block exports longer notes (len2=${d2} ticks, len4=${d4} ticks)`);
+  // a chord sustains to ~ the block end (length × 480 ticks), minus the small strum stagger
+  ok(Math.abs(d4 - 4*480) < 60, `chord note length tracks block length (~${4*480} ticks, got ${d4})`);
+}
+
+// ---------- Test 5: stretching a PATTERN block LOOPS the groove, not time-scale (US2) ----------
+{
+  const hits = (L)=>{
+    const m = parseSMF(arrangeToMidi({ bpm:120, blocks:[
+      { kind:'pattern', source:'strum', root:'C', quality:'maj', patternId:'downs', startBeat:0, lengthBeats:L } ] }));
+    return m.ons.length;   // 5 notes per downstroke hit
+  };
+  // 'downs' fires 4 hits over 4 beats; doubling the length to 8 loops it to 8 hits (not slower)
+  ok(hits(4) === 20, `4-beat pattern = 4 hits (20 notes), got ${hits(4)}`);
+  ok(hits(8) === 40, `8-beat pattern loops to 8 hits (40 notes), got ${hits(8)}`);
+}
+
+// ---------- Test 6: empty strip exports nothing (FR-015) ----------
 {
   ok(arrangeToMidi({ bpm:120, blocks:[] }) === null, 'empty strip -> arrangeToMidi returns null');
 }
