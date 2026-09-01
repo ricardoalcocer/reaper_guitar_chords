@@ -90,6 +90,7 @@
   #ar-count{color:var(--mute);font:11px var(--mono)}
   #ar-msg{color:var(--amber);font:11px var(--mono);margin-left:auto;min-height:1em;text-align:right}
   #ar-loop[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
+  #ar-fav{max-width:170px;padding:8px 10px}
   /* timeline: ruler + lane scroll together */
   #ar-scroll{display:none;overflow-x:auto;overflow-y:hidden;margin:0 8px 10px;
              border:1px solid var(--line);border-radius:6px;background:#1c1e22;touch-action:pan-x}
@@ -136,7 +137,7 @@
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+837282b</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+e56285e</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
@@ -261,6 +262,9 @@
     <button class="btn toggle" id="ar-loop" aria-pressed="false">Loop</button>
     <button class="btn toggle" id="ar-metro" aria-pressed="false" title="Metronome click while the song plays">Click</button>
     <button class="btn" id="ar-export">Export MIDI</button>
+    <button class="btn" id="ar-save" title="Save the current song as a favorite">Save</button>
+    <select class="btn" id="ar-fav" title="Load a saved favorite"><option value="">&#9733; Favorites…</option></select>
+    <button class="btn" id="ar-favdel" title="Delete the selected favorite">Del</button>
     <button class="btn" id="ar-clear">Clear</button>
     <label class="ctl">Tempo <input type="range" id="ar-bpm" min="60" max="200" value="120">
       <span id="ar-bpmv" style="font-family:var(--mono);color:var(--ink)">120</span></label>
@@ -1125,7 +1129,8 @@ $('ar-ruler').onpointerdown=(e)=>{ e.preventDefault(); arStopIfPlaying();
     arSave(); };
   r.addEventListener('pointermove',mv); r.addEventListener('pointerup',up); r.addEventListener('pointercancel',up);
 };
-$('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; arStopIfPlaying(); AR.blocks=[]; AR.loopA=AR.loopB=null; arRender(); arSave(); arMsg('Cleared.'); };
+$('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; arStopIfPlaying(); AR.blocks=[]; AR.loopA=AR.loopB=null;
+  currentFav=null; refreshFavs(); arRender(); arSave(); arMsg('Cleared.'); };
 
 /* play the song (or just the loop range) through the transport; a playhead sweeps the window */
 function arPlay(){
@@ -1227,25 +1232,60 @@ $('ar-export').onclick=arExport;
 $('ar-bpm').oninput=e=>{ AR.bpm=+e.target.value; $('ar-bpmv').textContent=e.target.value; arSave(); };
 
 /* persistence — guarded localStorage */
-function arSave(){
-  try{ localStorage.setItem('gcp-arranger', JSON.stringify({
+function songData(){
+  return {
     blocks:AR.blocks.map(b=>({source:b.source,root:b.root,quality:b.quality,art:b.art,palmMute:!!b.palmMute,three:!!b.three,
       drive:!!b.drive,patternId:b.patternId,chords:b.chords,name:b.name,startBeat:b.startBeat,lenBeats:b.lenBeats})),
-    bpm:AR.bpm, program:AR.program, h:AR.h, loop:AR.loop, loopA:AR.loopA, loopB:AR.loopB, metro:AR.metro })); }catch(e){}
+    bpm:AR.bpm, program:AR.program, h:AR.h, loop:AR.loop, loopA:AR.loopA, loopB:AR.loopB, metro:AR.metro };
 }
+function applySong(s){
+  AR.bpm=Math.max(40, Math.min(300, +s.bpm||120)); AR.program=s.program==null?25:s.program;
+  AR.h=s.h||190; AR.loop=!!s.loop; AR.metro=!!s.metro;
+  AR.loopA=(s.loopA!=null && s.loopB>s.loopA)?s.loopA:null; AR.loopB=AR.loopA==null?null:s.loopB;
+  AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
+    .filter(b=>{ try{ blockLoopStrokes(b); return b.lenBeats>=1 && blockLoopBeats(b)>0; }catch(e){ return false; } });
+  $('ar-bpm').value=AR.bpm; $('ar-bpmv').textContent=AR.bpm;
+  $('ar-loop').setAttribute('aria-pressed', AR.loop);
+  $('ar-metro').setAttribute('aria-pressed', AR.metro);
+}
+function arSave(){ try{ localStorage.setItem('gcp-arranger', JSON.stringify(songData())); }catch(e){} }
 function arLoad(){
-  try{ const s=JSON.parse(localStorage.getItem('gcp-arranger')); if(!s) return;
-    AR.bpm=Math.max(40, Math.min(300, +s.bpm||120)); AR.program=s.program==null?25:s.program;
-    AR.h=s.h||190; AR.loop=!!s.loop; AR.metro=!!s.metro;
-    AR.loopA=(s.loopA!=null && s.loopB>s.loopA)?s.loopA:null; AR.loopB=AR.loopA==null?null:s.loopB;
-    AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
-      .filter(b=>{ try{ blockLoopStrokes(b); return b.lenBeats>=1 && blockLoopBeats(b)>0; }catch(e){ return false; } });
-    $('ar-bpm').value=AR.bpm; $('ar-bpmv').textContent=AR.bpm;
-    $('ar-loop').setAttribute('aria-pressed', AR.loop);
-    $('ar-metro').setAttribute('aria-pressed', AR.metro);
-  }catch(e){ AR.blocks=[]; }
+  try{ const s=JSON.parse(localStorage.getItem('gcp-arranger')); if(s) applySong(s); }catch(e){ AR.blocks=[]; }
 }
+/* favorites — named songs kept in their own localStorage slot */
+let currentFav=null;
+function favsGet(){ try{ return JSON.parse(localStorage.getItem('gcp-songs')||'{}')||{}; }catch(e){ return {}; } }
+function favsSet(o){ try{ localStorage.setItem('gcp-songs', JSON.stringify(o)); }catch(e){} }
+function refreshFavs(){
+  const sel=$('ar-fav'), names=Object.keys(favsGet()).sort((a,b)=>a.localeCompare(b));
+  sel.innerHTML='<option value="">'+(names.length?'&#9733; Favorites…':'&#9733; No favorites yet')+'</option>'
+    + names.map(n=>`<option value="${n.replace(/"/g,'&quot;')}"${n===currentFav?' selected':''}>${n.replace(/</g,'&lt;')}</option>`).join('');
+}
+function saveFav(){
+  arStopIfPlaying();
+  if(!AR.blocks.length){ arMsg('Add some blocks before saving.'); return; }
+  const name=(prompt('Save this song as:', currentFav||'')||'').trim();
+  if(!name) return;
+  const all=favsGet(); all[name]=songData(); favsSet(all); currentFav=name; refreshFavs();
+  arMsg(`Saved “${name}”.`);
+}
+function loadFav(name){
+  if(!name) return;
+  const s=favsGet()[name]; if(!s){ arMsg('That favorite is gone.'); refreshFavs(); return; }
+  arStopIfPlaying(); applySong(s); currentFav=name; arRender(); arSave();
+  if(!AR.open) arToggle(true); refreshFavs(); arMsg(`Loaded “${name}”.`);
+}
+function delFav(){
+  const name=$('ar-fav').value; if(!name){ arMsg('Pick a favorite to delete.'); return; }
+  const all=favsGet(); delete all[name]; favsSet(all); if(currentFav===name) currentFav=null;
+  refreshFavs(); arMsg(`Deleted “${name}”.`);
+}
+$('ar-save').onclick=saveFav;
+$('ar-fav').onchange=e=>loadFav(e.target.value);
+$('ar-favdel').onclick=delFav;
+
 arLoad(); if(AR.blocks.length) arToggle(true); else arRender();
+refreshFavs();
 arFit();
 window.addEventListener('resize', ()=>{ if(AR.open) arRender(); else arFit(); });
 window.addEventListener('load', arFit);
