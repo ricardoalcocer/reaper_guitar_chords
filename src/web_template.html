@@ -43,6 +43,8 @@
   .dchip b{font:600 13px var(--mono);color:var(--amber)}
   .dchip span{font:11px var(--mono);color:var(--mute)}
   svg{width:100%;height:auto;display:block;touch-action:manipulation}
+  /* cap the fretboard so it doesn't get overly tall on the wide full-width layout */
+  #c-board svg,#s-board svg,#p-board svg,#pg-board svg{max-width:680px;margin-inline:auto}
   .str{stroke:var(--string);transition:stroke .06s,filter .06s}
   .str.lit{stroke:var(--amber);filter:drop-shadow(0 0 4px var(--amber))}
   .dot{fill:#F2ECD2;transition:fill .06s}

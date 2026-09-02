@@ -43,6 +43,8 @@
   .dchip b{font:600 13px var(--mono);color:var(--amber)}
   .dchip span{font:11px var(--mono);color:var(--mute)}
   svg{width:100%;height:auto;display:block;touch-action:manipulation}
+  /* cap the fretboard so it doesn't get overly tall on the wide full-width layout */
+  #c-board svg,#s-board svg,#p-board svg,#pg-board svg{max-width:680px;margin-inline:auto}
   .str{stroke:var(--string);transition:stroke .06s,filter .06s}
   .str.lit{stroke:var(--amber);filter:drop-shadow(0 0 4px var(--amber))}
   .dot{fill:#F2ECD2;transition:fill .06s}
@@ -137,7 +139,7 @@
 </style>
 
 <div class="wrap">
-  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+e56285e</span></h1>
+  <h1>Guitar voicing audition <span style="font-size:14px;color:var(--mute);font-family:var(--mono);font-weight:normal">v2.6.0+a1518c1</span></h1>
   <p class="sub">The same voicings and rhythms that are in your MIDI files, played by a plucked-string synth.</p>
 
   <div class="tabs" role="tablist">
