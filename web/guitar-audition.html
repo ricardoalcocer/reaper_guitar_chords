@@ -102,8 +102,12 @@
             background:#212429;font:10px var(--mono);color:var(--mute);cursor:text;touch-action:none;z-index:2}
   #ar-loopband{position:absolute;top:20px;bottom:0;z-index:1;pointer-events:none;
                background:rgba(228,162,60,.12);border-left:2px solid var(--amber);border-right:2px solid var(--amber)}
-  .ar-ruler-loop{position:absolute;top:0;bottom:0;pointer-events:none;
+  .ar-ruler-loop{position:absolute;top:0;bottom:0;pointer-events:auto;cursor:grab;touch-action:none;
                  background:rgba(228,162,60,.22);border-left:2px solid var(--amber);border-right:2px solid var(--amber)}
+  .ar-ruler-loop:active{cursor:grabbing}
+  .ar-loop-h{position:absolute;top:-3px;bottom:-3px;width:16px;cursor:ew-resize;z-index:3;touch-action:none}
+  .ar-loop-h.l{left:-8px} .ar-loop-h.r{right:-8px}
+  .ar-loop-h:hover{background:rgba(255,255,255,.28)}
   .ar-ruler-loop-lbl{position:absolute;top:3px;left:50%;transform:translateX(-50%);
                      font:700 9px var(--mono);color:var(--amber);white-space:nowrap;
                      text-shadow:0 1px 2px rgba(0,0,0,.7);letter-spacing:.03em}
@@ -230,7 +234,7 @@
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.8.0+50638a0</span></div>
+    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.9.0+089e715</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>
@@ -847,8 +851,9 @@ function chordPreview(){ stopAll(); audio(); if(ctx.state==='suspended') ctx.res
   stroke(CHORDS[sRoot][sQual].frets,'D', ctx.currentTime+.05, .6, false, lighter('sb')); }
 ROOTS.forEach(r=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=r;
   b.textContent=r; b.onclick=()=>{ sRoot=r; drawChord(); T?playStrum(true):chordPreview(); }; $('s-roots').append(b); });
-QUALS.forEach(([q,l])=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=q;
-  b.textContent=l; b.onclick=()=>{ sQual=q; drawChord(); T?playStrum(true):chordPreview(); }; $('s-quals').append(b); });
+// every voicing quality in the data — so any chord a progression can use is pickable here too
+Object.keys(CHORDS[sRoot]).forEach(q=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=q;
+  b.textContent=q; b.onclick=()=>{ sQual=q; drawChord(); T?playStrum(true):chordPreview(); }; $('s-quals').append(b); });
 function buildStrumPats(){
   $('s-pats').innerHTML='';
   Object.entries(STRUM_PATS).forEach(([name,pat])=>{
@@ -1008,9 +1013,11 @@ function arRender(){
   if(AR.loopA!=null && AR.loopB>AR.loopA){
     lb.hidden=false; lb.style.left=(AR.loopA*px)+'px'; lb.style.width=((AR.loopB-AR.loopA)*px)+'px';
     const strip=document.createElement('div'); strip.className='ar-ruler-loop';
-    strip.style.left=(AR.loopA*px)+'px'; strip.style.width=((AR.loopB-AR.loopA)*px)+'px';
-    strip.innerHTML=`<span class="ar-ruler-loop-lbl">&#8635; ${fmtPos(AR.loopA)}&ndash;${fmtPos(AR.loopB)}</span>`;
-    arRuler.append(strip);
+    strip.style.left=(AR.loopA*px)+'px'; strip.style.width=Math.max(6,(AR.loopB-AR.loopA)*px)+'px';
+    strip.innerHTML=`<span class="ar-loop-h l" title="Drag to move the loop start"></span>`
+      +`<span class="ar-ruler-loop-lbl">&#8635; ${fmtPos(AR.loopA)}&ndash;${fmtPos(AR.loopB)}</span>`
+      +`<span class="ar-loop-h r" title="Drag to move the loop end"></span>`;
+    arRuler.append(strip); arWireLoop(strip);
   } else lb.hidden=true;
   // blocks
   [...arLane.querySelectorAll('.ar-block')].forEach(e=>e.remove());
@@ -1096,7 +1103,31 @@ function arToggle(force){
 $('ar-title').onclick=()=>arToggle();
 $('ar-loop').onclick=e=>{ AR.loop=!AR.loop; e.target.setAttribute('aria-pressed',AR.loop); arSave(); };
 $('ar-metro').onclick=e=>{ AR.metro=!AR.metro; e.target.setAttribute('aria-pressed',AR.metro); arSave(); };
-/* drag across the ruler to set a loop range (auto-enables Loop); click clears it */
+/* edit an existing loop region: drag its edges to resize, or its body to move it (snap to beat) */
+function arWireLoop(strip){
+  const lb=$('ar-loopband'), lbl=strip.querySelector('.ar-ruler-loop-lbl');
+  const paint=()=>{ const px=AR.pxPerBeat;
+    strip.style.left=(AR.loopA*px)+'px'; strip.style.width=Math.max(6,(AR.loopB-AR.loopA)*px)+'px';
+    lb.style.left=(AR.loopA*px)+'px'; lb.style.width=((AR.loopB-AR.loopA)*px)+'px';
+    if(lbl) lbl.innerHTML=`&#8635; ${fmtPos(AR.loopA)}&ndash;${fmtPos(AR.loopB)}`; };
+  const startDrag=(e,mode)=>{ e.stopPropagation(); e.preventDefault(); arStopIfPlaying();
+    const a0=AR.loopA, b0=AR.loopB, x0=e.clientX, px=AR.pxPerBeat, tgt=e.currentTarget;
+    try{ tgt.setPointerCapture(e.pointerId); }catch(_){}
+    const mv=(ev)=>{ const d=Math.round((ev.clientX-x0)/px);
+      if(mode==='l') AR.loopA=Math.max(0, Math.min(b0-1, a0+d));
+      else if(mode==='r') AR.loopB=Math.max(a0+1, b0+d);
+      else { const len=b0-a0; AR.loopA=Math.max(0, a0+d); AR.loopB=AR.loopA+len; }
+      paint(); };
+    const up=()=>{ tgt.removeEventListener('pointermove',mv); tgt.removeEventListener('pointerup',up); tgt.removeEventListener('pointercancel',up);
+      AR.loop=true; $('ar-loop').setAttribute('aria-pressed',true); arRender(); arSave();
+      arMsg(`Loop: bars ${AR.loopA/BEATS_PER_BAR+1}–${AR.loopB/BEATS_PER_BAR+1} (${fmtLen(AR.loopB-AR.loopA)}).`); };
+    tgt.addEventListener('pointermove',mv); tgt.addEventListener('pointerup',up); tgt.addEventListener('pointercancel',up);
+  };
+  strip.querySelector('.ar-loop-h.l').onpointerdown=(e)=>startDrag(e,'l');
+  strip.querySelector('.ar-loop-h.r').onpointerdown=(e)=>startDrag(e,'r');
+  strip.onpointerdown=(e)=>{ if(e.target.classList.contains('ar-loop-h')) return; startDrag(e,'move'); };
+}
+/* drag across an empty part of the ruler to set a NEW loop range (auto-enables Loop); click clears it */
 $('ar-ruler').onpointerdown=(e)=>{ e.preventDefault(); arStopIfPlaying();
   const r=$('ar-ruler'), px=AR.pxPerBeat;
   const beatAt=(x)=>Math.max(0, Math.round((x-r.getBoundingClientRect().left)/px));
