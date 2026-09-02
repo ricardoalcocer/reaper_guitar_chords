@@ -147,7 +147,7 @@
   body{margin:0 !important;padding:0 !important;overflow:hidden}
   body.ar-open{padding:0 !important}                 /* cancel the old fixed-arranger padding */
   #app{display:grid;height:100vh;grid-template-columns:266px minmax(0,1fr);
-       grid-template-rows:auto minmax(0,1fr) minmax(220px,42vh);
+       grid-template-rows:auto minmax(0,1fr) minmax(148px,188px);
        grid-template-areas:"side head" "side work" "side song";gap:1px;background:var(--line)}
   #side{grid-area:side;background:var(--panel);display:flex;flex-direction:column;min-height:0}
   #head{grid-area:head;background:var(--panel);display:flex;align-items:center;gap:14px;padding:0 16px;min-height:54px;flex-wrap:wrap}
@@ -219,7 +219,7 @@
   #fav-toast.show{display:flex}
   #fav-toast #fav-undo{background:none;border:0;color:var(--amber);font-weight:700;cursor:pointer}
 
-  @media(max-width:760px){ #app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) minmax(200px,40vh);
+  @media(max-width:760px){ #app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) minmax(148px,180px);
     grid-template-areas:"head" "side" "work" "song"} #side{max-height:180px} }
 </style>
 
@@ -266,14 +266,14 @@
             <button class="btn primary" id="s-play">Play</button>
             <button class="btn" id="s-add" title="Add this chord + strum to the arranger">+ Song</button>
           </div>
+          <p class="eyebrow" style="margin-top:16px">Strum pattern &mdash; D down, U up, &times; muted click</p>
+          <div id="s-pats"></div>
         </div>
         <div class="panel">
           <p class="eyebrow">Chords in your key &mdash; play with keys <b style="color:var(--ink)">a s d f g h j</b></p>
           <div class="chips" id="c-diatonic"></div>
           <p class="eyebrow" style="margin-top:14px">Any root</p><div class="chips" id="s-roots"></div>
           <p class="eyebrow" style="margin-top:14px">Any quality</p><div class="chips" id="s-quals"></div>
-          <p class="eyebrow" style="margin-top:14px">Strum pattern &mdash; D down, U up, &times; muted click</p>
-          <div id="s-pats"></div>
         </div>
       </div>
 
@@ -290,10 +290,10 @@
             <button class="btn toggle" id="p-drive" aria-pressed="true">Drive</button>
             <button class="btn" id="p-add" title="Add this power-chord riff to the arranger">+ Song</button>
           </div>
+          <p class="eyebrow" style="margin-top:16px">Root</p><div class="chips" id="p-roots"></div>
         </div>
         <div class="panel">
-          <p class="eyebrow">Root</p><div class="chips" id="p-roots"></div>
-          <p class="eyebrow" style="margin-top:14px">Power-chord pattern &mdash; filled is palm muted, bright is open</p>
+          <p class="eyebrow">Power-chord pattern &mdash; filled is palm muted, bright is open</p>
           <div id="p-pats"></div>
         </div>
       </div>
@@ -309,10 +309,10 @@
             <button class="btn primary" id="pg-play">Play</button>
             <button class="btn" id="pg-add" title="Add every chord of this progression to the arranger">+ Song</button>
           </div>
+          <p class="eyebrow" style="margin-top:16px">Strum pattern</p><div class="chips" id="pg-pats"></div>
         </div>
         <div class="panel">
           <p class="eyebrow">Mood</p><div class="chips" id="pg-moods"></div>
-          <p class="eyebrow" style="margin-top:14px">Strum pattern</p><div class="chips" id="pg-pats"></div>
           <p class="eyebrow" style="margin-top:14px">Progression <span id="pg-count" style="color:var(--mute)"></span></p>
           <div id="pg-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--line);border-radius:8px"></div>
         </div>
