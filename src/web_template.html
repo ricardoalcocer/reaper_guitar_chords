@@ -245,62 +245,30 @@
     <div class="ws-pad">
       <div class="srcrow">
         <div class="seg" role="tablist">
-          <button class="tab" role="tab" aria-selected="false" data-view="prog">Inspire</button>
-          <button class="tab" role="tab" aria-selected="true" data-view="chords">In key</button>
+          <button class="tab" role="tab" aria-selected="false" data-view="prog">Progression</button>
+          <button class="tab" role="tab" aria-selected="true" data-view="strum">Chord</button>
           <button class="tab" role="tab" aria-selected="false" data-view="power">Power</button>
-          <button class="tab" role="tab" aria-selected="false" data-view="strum">Single</button>
         </div>
       </div>
 
-      <!-- CHORDS / In key -->
-      <div id="v-chords">
+      <!-- CHORD: one chord, free root+quality, with in-key suggestions -->
+      <div id="v-strum">
         <div class="panel">
-          <div class="head"><span class="name" id="c-name">A</span><span class="dia" id="c-dia"></span>
+          <div class="head"><span class="name" id="s-name">C</span><span class="dia" id="s-dia"></span>
             <span class="numeral" id="c-num"></span></div>
-          <div class="meta" id="c-meta"></div>
           <div class="func" id="c-func"></div>
-          <div id="c-board"></div>
-          <div class="row">
-            <button class="btn toggle" id="c-down" aria-pressed="true">Strum down</button>
-            <button class="btn toggle" id="c-up" aria-pressed="false">Strum up</button>
-            <button class="btn toggle" id="c-arp" aria-pressed="false">Arpeggio</button>
-            <button class="btn toggle" id="c-pm" aria-pressed="false">Palm mute</button>
-            <button class="btn toggle" id="c-cut" aria-pressed="false" title="When on, a new chord silences the previous one">Cut off</button>
-            <button class="btn" id="c-add" title="Add this chord to the arranger">+ Song</button>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="gkey-hide">
-            <p class="eyebrow">Key</p>
-            <div class="chips" id="c-keys"></div>
-            <div class="row" style="margin-top:10px">
-              <button class="btn toggle" id="c-major" aria-pressed="true">Major</button>
-              <button class="btn toggle" id="c-minor" aria-pressed="false">Minor</button>
-            </div>
-          </div>
-          <p class="eyebrow">Quality &mdash; applied across the key</p>
-          <div class="chips" id="c-quals"></div>
-          <p class="eyebrow" style="margin-top:14px">Chords in this key &mdash; play with keys <b style="color:var(--ink)">a s d f g h j</b></p>
-          <div class="chips" id="c-diatonic"></div>
-        </div>
-      </div>
-
-      <!-- STRUM / Single -->
-      <div id="v-strum" hidden>
-        <div class="panel">
-          <div class="head"><span class="name" id="s-name">Am</span><span class="dia" id="s-dia"></span></div>
           <div id="s-board"></div>
           <div class="row">
             <button class="btn primary" id="s-play">Play</button>
-            <label class="ctl">Tempo <input type="range" id="s-bpm" min="60" max="160" value="100">
-              <span id="s-bpmv" style="font-family:var(--mono);color:var(--ink)">100</span></label>
-            <button class="btn" id="s-add" title="Add this strum pattern to the arranger">+ Song</button>
+            <button class="btn" id="s-add" title="Add this chord + strum to the arranger">+ Song</button>
           </div>
         </div>
         <div class="panel">
-          <p class="eyebrow">Root</p><div class="chips" id="s-roots"></div>
-          <p class="eyebrow" style="margin-top:14px">Quality</p><div class="chips" id="s-quals"></div>
-          <p class="eyebrow" style="margin-top:14px">Pattern &mdash; D down, U up, &times; muted click</p>
+          <p class="eyebrow">Chords in your key &mdash; play with keys <b style="color:var(--ink)">a s d f g h j</b></p>
+          <div class="chips" id="c-diatonic"></div>
+          <p class="eyebrow" style="margin-top:14px">Any root</p><div class="chips" id="s-roots"></div>
+          <p class="eyebrow" style="margin-top:14px">Any quality</p><div class="chips" id="s-quals"></div>
+          <p class="eyebrow" style="margin-top:14px">Strum pattern &mdash; D down, U up, &times; muted click</p>
           <div id="s-pats"></div>
         </div>
       </div>
@@ -316,19 +284,17 @@
             <button class="btn primary" id="p-play">Play</button>
             <button class="btn toggle" id="p-notes" aria-pressed="false">3-note</button>
             <button class="btn toggle" id="p-drive" aria-pressed="true">Drive</button>
-            <label class="ctl">Tempo <input type="range" id="p-bpm" min="80" max="200" value="120">
-              <span id="p-bpmv" style="font-family:var(--mono);color:var(--ink)">120</span></label>
             <button class="btn" id="p-add" title="Add this power-chord riff to the arranger">+ Song</button>
           </div>
         </div>
         <div class="panel">
           <p class="eyebrow">Root</p><div class="chips" id="p-roots"></div>
-          <p class="eyebrow" style="margin-top:14px">Pattern &mdash; filled is palm muted, bright is open</p>
+          <p class="eyebrow" style="margin-top:14px">Power-chord pattern &mdash; filled is palm muted, bright is open</p>
           <div id="p-pats"></div>
         </div>
       </div>
 
-      <!-- PROGRESSIONS / Inspire -->
+      <!-- PROGRESSION -->
       <div id="v-prog" hidden>
         <div class="panel">
           <div class="head"><span class="name" id="pg-name" style="font-size:20px">&mdash;</span></div>
@@ -337,22 +303,12 @@
           <div id="pg-board"></div>
           <div class="row">
             <button class="btn primary" id="pg-play">Play</button>
-            <label class="ctl">Tempo <input type="range" id="pg-bpm" min="60" max="200" value="100">
-              <span id="pg-bpmv" style="font-family:var(--mono);color:var(--ink)">100</span></label>
             <button class="btn" id="pg-add" title="Add every chord of this progression to the arranger">+ Song</button>
           </div>
         </div>
         <div class="panel">
-          <div class="gkey-hide">
-            <p class="eyebrow">Start on</p>
-            <div class="chips" id="pg-keys"></div>
-            <div class="row" style="margin-top:10px">
-              <button class="btn toggle" id="pg-major" aria-pressed="true">Major</button>
-              <button class="btn toggle" id="pg-minor" aria-pressed="false">Minor</button>
-            </div>
-          </div>
           <p class="eyebrow">Mood</p><div class="chips" id="pg-moods"></div>
-          <p class="eyebrow" style="margin-top:14px">Pattern</p><div class="chips" id="pg-pats"></div>
+          <p class="eyebrow" style="margin-top:14px">Strum pattern</p><div class="chips" id="pg-pats"></div>
           <p class="eyebrow" style="margin-top:14px">Progression <span id="pg-count" style="color:var(--mute)"></span></p>
           <div id="pg-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--line);border-radius:8px"></div>
         </div>
@@ -376,9 +332,8 @@
         <button class="btn toggle" id="ar-metro" aria-pressed="false" title="Metronome click while the song plays">Click</button>
         <button class="btn" id="ar-export">Export MIDI</button>
         <button class="btn" id="ar-clear">Clear</button>
-        <label class="ctl">Tempo <input type="range" id="ar-bpm" min="60" max="200" value="120">
-          <span id="ar-bpmv" style="font-family:var(--mono);color:var(--ink)">120</span></label>
         <span id="ar-favhost" hidden>
+          <label class="ctl">Tempo <input type="range" id="ar-bpm" min="60" max="200" value="120"><span id="ar-bpmv">120</span></label>
           <button id="ar-save">Save</button>
           <select id="ar-fav"><option value="">&#9733; Favorites&hellip;</option></select>
           <button id="ar-favdel">Del</button>
@@ -855,123 +810,76 @@ function start(btn, cells, getStep, onStep){
 }
 
 /* ---------- chords tab ---------- */
-let cRoot='C', cQual='maj', cPM=false, cArt='D', cCut=false, keyPC=0, keyMode='maj', qMode='dia';   // cCut: new chord silences the last
+let keyPC=0, keyMode='maj';          // one global key, drives in-key suggestions + roman numerals
 const $ = id => document.getElementById(id);
-// The 7 chords of the current key. qMode 'dia'/'dia7' = the natural diatonic qualities; ANY other
-// quality (e.g. 'm7') is applied to every degree — the roman numerals, all in that quality.
+function tempo(){ return AR.bpm; }        // one global tempo for every audition and the song
+const HOME=['a','s','d','f','g','h','j'];
+// the 7 natural chords of the current global key (in-key quick-picks)
 function keyDegrees(){
   const degs = keyMode==='maj'?DIA_MAJ:DIA_MIN;
-  const nat = keyMode==='maj'
-    ? (qMode==='dia7'?['maj7','m7','m7','maj7','7','m7','m7b5']:['maj','m','m','maj','maj','m','dim'])
-    : (qMode==='dia7'?['m7','m7b5','maj7','m7','7','maj7','7']:['m','dim','maj','m','maj','maj','maj']);
-  return degs.map((d,i)=>{
-    const pc=(keyPC+d)%12, q=(qMode==='dia'||qMode==='dia7')?nat[i]:qMode;
-    return {pc, quality:q, numeral:analyze(keyPC,keyMode,pc,q).numeral, root:NAMES[pc]};
-  });
+  const nat  = keyMode==='maj' ? ['maj','m','m','maj','maj','m','dim'] : ['m','dim','maj','m','maj','maj','maj'];
+  return degs.map((d,i)=>{ const pc=(keyPC+d)%12, q=nat[i];
+    return {pc, quality:q, numeral:analyze(keyPC,keyMode,pc,q).numeral, root:NAMES[pc]}; });
 }
-// keep the auditioned chord on the tonic degree of the current key + quality
-function selectTonic(){ const dc=keyDegrees()[0]; cRoot=NAMES[dc.pc]; cQual=dc.quality; }
-function drawChords(){
-  const d = CHORDS[cRoot][cQual];
-  $('c-name').textContent = d.label; $('c-dia').textContent = d.dia;
-  $('c-meta').textContent = `${d.notes}  ·  ${d.shape}`;
-  const a = analyze(keyPC, keyMode, NAMES.indexOf(cRoot), cQual);
-  $('c-num').textContent = a.numeral;
-  $('c-func').innerHTML = `${a.func} <span>— ${a.note}, in ${NAMES[keyPC]} ${keyMode==='maj'?'major':'minor'}</span>`;
-  drawDiatonic();
-  $('c-board').innerHTML = board(d.frets,'cb');
-  [...$('c-quals').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===qMode));
-}
-const QMODES = [['dia','Diatonic'],['dia7','Diatonic 7ths'],['maj','maj'],['m','m'],['7','7'],['m7','m7'],
-  ['maj7','maj7'],['m7b5','m7b5'],['dim7','dim7'],['dim','dim'],['aug','aug'],['sus2','sus2'],
-  ['sus4','sus4'],['7sus4','7sus4'],['6','6'],['m6','m6'],['9','9'],['add9','add9']];
-QMODES.forEach(([v,l])=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=v;
-  b.textContent=l; b.onclick=()=>{ qMode=v; selectTonic(); drawChords(); strumC(cArt); }; $('c-quals').append(b); });
-function drawDiatonic(){
-  const host = $('c-diatonic'); if(!host) return;
-  host.innerHTML='';
-  keyDegrees().forEach(dc=>{
-    const b=document.createElement('button'); b.className='dchip';
-    b.setAttribute('aria-pressed', NAMES.indexOf(cRoot)===dc.pc && cQual===dc.quality);
-    b.innerHTML=`<b>${dc.numeral}</b><span>${dc.root}${dc.quality==='maj'?'':dc.quality}</span>`;
-    b.onclick=()=>{ cRoot=NAMES[dc.pc]; cQual=dc.quality; drawChords(); strumC(cArt); };
-    host.append(b);
-  });
-  [...$('c-keys').children].forEach(b=>b.setAttribute('aria-pressed', NAMES.indexOf(b.dataset.v)===keyPC));
-}
-function strumC(kind){
-  stopAll(); audio(); if(ctx.state==='suspended') ctx.resume();
-  if(cCut) hush();                                        // cut off the previous chord if the setting is on
-  const f = CHORDS[cRoot][cQual].frets, spb = .6;
-  // route every articulation through stroke() so what you hear == what a chord block replays
-  const k = kind==='arp' ? 'A' : (cPM ? 'P' : kind);
-  stroke(f, k, ctx.currentTime+.05, spb, false, lighter('cb'));
-}
-ROOTS.forEach(r=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=r;
-  b.textContent=r; b.onclick=()=>{keyPC=NAMES.indexOf(r);selectTonic();drawChords();strumC(cArt);}; $('c-keys').append(b); });
-function setKeyMode(m){ keyMode=m;
-  $('c-major').setAttribute('aria-pressed', m==='maj'); $('c-minor').setAttribute('aria-pressed', m==='min');
-  selectTonic(); drawChords(); strumC(cArt); }
-$('c-major').onclick=()=>setKeyMode('maj');
-$('c-minor').onclick=()=>setKeyMode('min');
-// the strum is a persistent choice, so what you add to the song matches what you hear
-function updateArt(){ [['D','c-down'],['U','c-up'],['arp','c-arp']].forEach(([a,id])=>$(id).setAttribute('aria-pressed', a===cArt)); }
-function setArt(a){ cArt=a; updateArt(); strumC(a); }
-$('c-down').onclick=()=>setArt('D'); $('c-up').onclick=()=>setArt('U');
-$('c-arp').onclick=()=>setArt('arp');
-$('c-pm').onclick=e=>{cPM=!cPM;e.target.setAttribute('aria-pressed',cPM);strumC(cArt);};
-$('c-cut').onclick=e=>{cCut=!cCut;e.target.setAttribute('aria-pressed',cCut); if(cCut) hush();};
 
-/* ---------- strumming tab ---------- */
-let sRoot='A', sQual='m', sPat='classic', sCells=[];    // any chord, not a fixed shortlist
-function drawStrum(){
+/* ---------- CHORD source: single chord, free root+quality, in-key suggestions ---------- */
+let sRoot='C', sQual='maj', sPat='classic';
+function drawChord(){
   const d=CHORDS[sRoot][sQual];
   $('s-name').textContent=d.label; $('s-dia').textContent=d.dia;
-  $('s-board').innerHTML = board(d.frets,'sb');
+  const a=analyze(keyPC,keyMode,NAMES.indexOf(sRoot),sQual);
+  $('c-num').textContent=a.numeral;
+  $('c-func').innerHTML=`${a.func} <span>&mdash; ${a.note}, in ${NAMES[keyPC]} ${keyMode==='maj'?'major':'minor'}</span>`;
+  $('s-board').innerHTML=board(d.frets,'sb');
   [...$('s-roots').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===sRoot));
   [...$('s-quals').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===sQual));
+  drawDiatonic();
 }
+function drawDiatonic(){
+  const host=$('c-diatonic'); if(!host) return; host.innerHTML='';
+  keyDegrees().forEach((dc,i)=>{ const b=document.createElement('button'); b.className='dchip';
+    b.setAttribute('aria-pressed', NAMES.indexOf(sRoot)===dc.pc && sQual===dc.quality);
+    b.innerHTML=`<b>${dc.numeral}</b><span>${dc.root}${dc.quality==='maj'?'':dc.quality} &middot; ${HOME[i]}</span>`;
+    b.onclick=()=>{ sRoot=NAMES[dc.pc]; sQual=dc.quality; drawChord(); T?playStrum(true):chordPreview(); };
+    host.append(b); });
+}
+function chordPreview(){ stopAll(); audio(); if(ctx.state==='suspended') ctx.resume();
+  stroke(CHORDS[sRoot][sQual].frets,'D', ctx.currentTime+.05, .6, false, lighter('sb')); }
 ROOTS.forEach(r=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=r;
-  b.textContent=r; b.onclick=()=>{sRoot=r;drawStrum(); if(T) playStrum(true);}; $('s-roots').append(b); });
+  b.textContent=r; b.onclick=()=>{ sRoot=r; drawChord(); T?playStrum(true):chordPreview(); }; $('s-roots').append(b); });
 QUALS.forEach(([q,l])=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=q;
-  b.textContent=l; b.onclick=()=>{sQual=q;drawStrum(); if(T) playStrum(true);}; $('s-quals').append(b); });
+  b.textContent=l; b.onclick=()=>{ sQual=q; drawChord(); T?playStrum(true):chordPreview(); }; $('s-quals').append(b); });
 function buildStrumPats(){
   $('s-pats').innerHTML='';
   Object.entries(STRUM_PATS).forEach(([name,pat])=>{
     const row=document.createElement('div'); row.className='pat'; row.setAttribute('role','button');
     row.setAttribute('aria-pressed', name===sPat); row.tabIndex=0;
     row.innerHTML=`<span class="pat-name">${name}</span><div class="grid">`+
-      pat.map((k,i)=>`<span class="cell${i%2===0?' beat':''}${k?' hit':''}${k==='D'||k==='U'?' open':''}${k==='x'?' ghost':''}">${k==='x'?'×':(k||'')}</span>`).join('')+`</div>`;
+      pat.map((k,i)=>`<span class="cell${i%2===0?' beat':''}${k?' hit':''}${k==='D'||k==='U'?' open':''}${k==='x'?' ghost':''}">${k==='x'?'\u00d7':(k||'')}</span>`).join('')+`</div>`;
     const go=()=>{ sPat=name; buildStrumPats(); playStrum(); };
     row.onclick=go; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();go();}};
     $('s-pats').append(row);
   });
 }
 function playStrum(force){
-  const bpm=+$('s-bpm').value, pat=STRUM_PATS[sPat];
   if(T && !force){ stopAll(); return; }
+  const pat=STRUM_PATS[sPat], bpm=tempo(), lit=lighter('sb');
   const cells=[...$('s-pats').querySelectorAll('.pat[aria-pressed=true] .cell')];
-  const lit=lighter('sb');
-  start($('s-play'), cells, (i,when)=>{
-    const slot=i%8, spb=60/bpm, dur=spb/2;
-    const k=pat[slot];
-    if(k) stroke(CHORDS[sRoot][sQual].frets, k, when, spb, false, lit);
-    return {slot, dur};
-  });
+  start($('s-play'), cells, (i,when)=>{ const slot=i%8, spb=60/bpm, dur=spb/2, k=pat[slot];
+    if(k) stroke(CHORDS[sRoot][sQual].frets, k, when, spb, false, lit); return {slot, dur}; });
 }
 $('s-play').onclick=()=>playStrum();
-$('s-bpm').oninput=e=>{ $('s-bpmv').textContent=e.target.value; if(T) playStrum(true); };
 
-/* ---------- power tab ---------- */
+/* ---------- POWER source ---------- */
 let pRoot='E', pPat='gallop', pThree=false, pDrive=true;
 function drawPower(){
   const f=powerChord(pRoot,pThree);
   const notes=f.map((x,i)=>x===null?null:NAMES[(OPEN[i]+x)%12]+Math.floor((OPEN[i]+x)/12-1)).filter(Boolean);
   $('p-name').textContent=pRoot+'5';
   $('p-dia').textContent=f.map(x=>x===null?'x':x.toString(16)).join('');
-  $('p-meta').textContent=`${notes.join(' ')}  ·  ${pThree?'root + 5th + octave':'root + 5th'}`;
-  const pa = analyze(keyPC, keyMode, NAMES.indexOf(pRoot), '5');
-  $('p-num').textContent = pa.numeral + '  ' + pa.func.toLowerCase();
+  $('p-meta').textContent=`${notes.join(' ')}  \u00b7  ${pThree?'root + 5th + octave':'root + 5th'}`;
+  const pa=analyze(keyPC,keyMode,NAMES.indexOf(pRoot),'5');
+  $('p-num').textContent=pa.numeral+'  '+pa.func.toLowerCase();
   $('p-board').innerHTML=board(f,'pb');
   [...$('p-roots').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===pRoot));
 }
@@ -990,115 +898,73 @@ function buildPowerPats(){
   });
 }
 function playPower(force){
-  const bpm=+$('p-bpm').value, {p,div}=POWER_PATS[pPat];
   if(T && !force){ stopAll(); return; }
+  const {p,div}=POWER_PATS[pPat], bpm=tempo(), lit=lighter('pb');
   const cells=[...$('p-pats').querySelectorAll('.pat[aria-pressed=true] .cell')];
-  const lit=lighter('pb');
-  start($('p-play'), cells, (i,when)=>{
-    const slot=i%p.length, spb=60/bpm, dur=spb/div, k=p[slot];
-    if(k) stroke(powerChord(pRoot,pThree), k, when, spb, pDrive, lit);
-    return {slot, dur};
-  });
+  start($('p-play'), cells, (i,when)=>{ const slot=i%p.length, spb=60/bpm, dur=spb/div, k=p[slot];
+    if(k) stroke(powerChord(pRoot,pThree), k, when, spb, pDrive, lit); return {slot, dur}; });
 }
 $('p-play').onclick=()=>playPower();
 $('p-notes').onclick=e=>{pThree=!pThree;e.target.setAttribute('aria-pressed',pThree);
   e.target.textContent=pThree?'3-note':'2-note';drawPower(); if(T) playPower(true);};
 $('p-drive').onclick=e=>{pDrive=!pDrive;e.target.setAttribute('aria-pressed',pDrive);};
-$('p-bpm').oninput=e=>{ $('p-bpmv').textContent=e.target.value; if(T) playPower(true); };
 
-/* ---------- progressions tab ---------- */
+/* ---------- PROGRESSION source ---------- */
 let pgStartPC=0, pgMode='maj', pgMood=PROGS.moods[0], pgSel=0, pgPat='downs';
 function progList(){ return PROGS.progressions.filter(p=>p.mood===pgMood); }
-function progChords(p){
-  return p.chords.map(([deg,q])=>{
-    const root=NAMES[(pgStartPC+deg)%12];
-    return {root, q, ...CHORDS[root][q]};
-  });
-}
+function progChords(p){ return p.chords.map(([deg,q])=>{ const root=NAMES[(pgStartPC+deg)%12]; return {root,q,...CHORDS[root][q]}; }); }
 function currentProg(){ const l=progList(); return l[Math.min(pgSel,l.length-1)]||l[0]; }
-// render the board + chord line, optionally lighting the chord at `bar` (-1 = none)
-function showProgBar(cs, bar){
-  $('pg-board').innerHTML = board(cs[bar<0?0:bar].frets,'pgb');
-  $('pg-chords').innerHTML = cs.map((c,j)=>
-    `<span style="color:${j===bar?'var(--amber)':'var(--mute)'}">${c.label}</span>`).join('   ');
-}
+function showProgBar(cs,bar){ $('pg-board').innerHTML=board(cs[bar<0?0:bar].frets,'pgb');
+  $('pg-chords').innerHTML=cs.map((c,j)=>`<span style="color:${j===bar?'var(--amber)':'var(--mute)'}">${c.label}</span>`).join('   '); }
 function drawProg(){
-  const p=currentProg(); if(!p){ return; }
-  const cs=progChords(p);
-  $('pg-name').textContent = p.name || (pgMood+' progression');
-  $('pg-num').innerHTML = cs.map(c=>analyze(pgStartPC,pgMode,NAMES.indexOf(c.root),c.q).numeral).join('  ')
-    + ` <span>— in ${NAMES[pgStartPC]} ${pgMode==='maj'?'major':'minor'}, ${cs.length} bars</span>`;
-  showProgBar(cs, -1);
-  [...$('pg-keys').children].forEach(b=>b.setAttribute('aria-pressed', NAMES.indexOf(b.dataset.v)===pgStartPC));
+  const p=currentProg(); if(!p) return; const cs=progChords(p);
+  $('pg-name').textContent=p.name||(pgMood+' progression');
+  $('pg-num').innerHTML=cs.map(c=>analyze(pgStartPC,pgMode,NAMES.indexOf(c.root),c.q).numeral).join('  ')
+    + ` <span>&mdash; in ${NAMES[pgStartPC]} ${pgMode==='maj'?'major':'minor'}, ${cs.length} bars</span>`;
+  showProgBar(cs,-1);
   [...$('pg-moods').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===pgMood));
   [...$('pg-pats').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===pgPat));
 }
 function buildProgList(){
-  const host=$('pg-list'), l=progList(); host.innerHTML='';
-  $('pg-count').textContent = `(${l.length})`;
-  l.forEach((p,idx)=>{
-    const cs=progChords(p);
-    const row=document.createElement('div');
+  const host=$('pg-list'), l=progList(); host.innerHTML=''; $('pg-count').textContent=`(${l.length})`;
+  l.forEach((p,idx)=>{ const cs=progChords(p); const row=document.createElement('div');
     row.setAttribute('role','button'); row.tabIndex=0;
-    row.style.cssText='padding:7px 12px;cursor:pointer;border-bottom:1px solid var(--line);'
-      +'font-size:13px;'+(idx===pgSel?'background:var(--amber-dim,#284773)':'');
-    const label = p.name ? `<b style="color:var(--ink)">${p.name}</b> ` : '';
-    row.innerHTML = label + `<span style="font-family:var(--mono);color:var(--mute)">`
-      + cs.map(c=>c.label).join(' - ') + `</span>`;
+    row.style.cssText='padding:7px 12px;cursor:pointer;border-bottom:1px solid var(--line);font-size:13px;'+(idx===pgSel?'background:var(--amber-dim,#284773)':'');
+    const label=p.name?`<b style="color:var(--ink)">${p.name}</b> `:'';
+    row.innerHTML=label+`<span style="font-family:var(--mono);color:var(--mute)">`+cs.map(c=>c.label).join(' - ')+`</span>`;
     const go=()=>{ pgSel=idx; drawProg(); buildProgList(); playProg(true); };
     row.onclick=go; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();go();}};
-    host.append(row);
-  });
+    host.append(row); });
 }
 function playProg(force){
   if(T && !force){ stopAll(); drawProg(); return; }
   const p=currentProg(); if(!p) return;
-  const cs=progChords(p), pat=STRUM_PATS[pgPat], bpm=+$('pg-bpm').value, lit=lighter('pgb');
-  start($('pg-play'), null, (i,when)=>{
-    const slot=i%8, bar=Math.floor(i/8)%cs.length, spb=60/bpm, dur=spb/2, k=pat[slot];
-    if(k) stroke(cs[bar].frets, k, when, spb, false, lit);
-    return {slot, dur, cs, bar};
-  }, step=>{ if(step.slot===0) showProgBar(step.cs, step.bar); });   // board follows in real time
+  const cs=progChords(p), pat=STRUM_PATS[pgPat], bpm=tempo(), lit=lighter('pgb');
+  start($('pg-play'), null, (i,when)=>{ const slot=i%8, bar=Math.floor(i/8)%cs.length, spb=60/bpm, dur=spb/2, k=pat[slot];
+    if(k) stroke(cs[bar].frets, k, when, spb, false, lit); return {slot, dur, cs, bar};
+  }, step=>{ if(step.slot===0) showProgBar(step.cs, step.bar); });
 }
-ROOTS.forEach(r=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=r;
-  b.textContent=r; b.onclick=()=>{pgStartPC=NAMES.indexOf(r);drawProg();buildProgList();if(T)playProg(true);};
-  $('pg-keys').append(b); });
 PROGS.moods.forEach(m=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=m;
-  b.textContent=m; b.onclick=()=>{pgMood=m;pgSel=0;drawProg();buildProgList();stopAll();};
-  $('pg-moods').append(b); });
+  b.textContent=m; b.onclick=()=>{pgMood=m;pgSel=0;drawProg();buildProgList();stopAll();}; $('pg-moods').append(b); });
 Object.keys(STRUM_PATS).forEach(name=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=name;
   b.textContent=name; b.onclick=()=>{pgPat=name;drawProg();if(T)playProg(true);}; $('pg-pats').append(b); });
-function setProgMode(m){ pgMode=m;
-  $('pg-major').setAttribute('aria-pressed', m==='maj'); $('pg-minor').setAttribute('aria-pressed', m==='min');
-  drawProg(); if(T) playProg(true); }
-$('pg-major').onclick=()=>setProgMode('maj');
-$('pg-minor').onclick=()=>setProgMode('min');
 $('pg-play').onclick=()=>playProg();
-$('pg-bpm').oninput=e=>{ $('pg-bpmv').textContent=e.target.value; if(T) playProg(true); };
 
-/* ---------- tabs ---------- */
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
-  stopAll();
+/* ---------- source switch + shortcuts ---------- */
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ stopAll();
   document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected', x===t));
-  ['chords','strum','power','prog'].forEach(v=>$('v-'+v).hidden = v!==t.dataset.view);
+  ['strum','power','prog'].forEach(v=>$('v-'+v).hidden = v!==t.dataset.view);
 });
 document.addEventListener('keydown',e=>{
   const typing=/INPUT|TEXTAREA/.test(e.target.tagName);
   const v=document.querySelector('.tab[aria-selected=true]').dataset.view;
-  if(e.code==='Space' && !typing && !/BUTTON/.test(e.target.tagName)){
-    e.preventDefault();
-    v==='chords'?strumC(cArt):v==='strum'?playStrum():v==='power'?playPower():playProg();
-    return;
-  }
-  // Chords tab: home-row a s d f g h j play the 7 chords in the current key (I..vii°)
-  if(v==='chords' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey){
-    const i='asdfghj'.indexOf(e.key);
-    if(i>=0){ e.preventDefault(); const dc=keyDegrees()[i];
-      cRoot=NAMES[dc.pc]; cQual=dc.quality; drawChords(); strumC(cArt); }
-  }
+  if(e.code==='Space' && !typing && !/BUTTON/.test(e.target.tagName)){ e.preventDefault();
+    v==='strum'?playStrum():v==='power'?playPower():playProg(); return; }
+  if(v==='strum' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey){ const i='asdfghj'.indexOf(e.key);
+    if(i>=0){ e.preventDefault(); const dc=keyDegrees()[i]; sRoot=NAMES[dc.pc]; sQual=dc.quality; drawChord(); chordPreview(); } }
 });
-drawChords(); updateArt(); drawStrum(); buildStrumPats(); drawPower(); buildPowerPats();
-drawProg(); buildProgList();
+drawChord(); buildStrumPats(); drawPower(); buildPowerPats(); drawProg(); buildProgList();
+
 
 /* ==================== ARRANGER: SONG TRACK (DOM) ==================== */
 const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false, loopA:null, loopB:null, metro:false };
@@ -1172,12 +1038,10 @@ function arAdd(cap){
   if(!AR.open) arToggle(true);
 }
 /* capture the current audition of each tab, replayed exactly (no invented rhythm) */
-function capChord(){ return {source:'chord', root:cRoot, quality:cQual, art:cArt, palmMute:cPM}; }   // exactly what was auditioned
 function capStrum(){ return {source:'strum', root:sRoot, quality:sQual, patternId:sPat}; }
 function capPower(){ return {source:'power', root:pRoot, three:pThree, drive:pDrive, patternId:pPat}; }
 function capProg(){ const p=currentProg(); if(!p) return null;
   return {source:'prog', chords:progChords(p).map(c=>({root:c.root, quality:c.q})), name:p.name||null, patternId:pgPat}; }
-$('c-add').onclick=()=>arAdd(capChord());
 $('s-add').onclick=()=>arAdd(capStrum());
 $('p-add').onclick=()=>arAdd(capPower());
 $('pg-add').onclick=()=>{ const c=capProg(); if(c) arAdd(c); else arMsg('No progression selected.'); };
@@ -1314,11 +1178,11 @@ function arCurrentFrets(tb){
   }
   return null;
 }
-const AR_BOARD={chords:['c-board','cb'],strum:['s-board','sb'],power:['p-board','pb'],prog:['pg-board','pgb']};
+const AR_BOARD={strum:['s-board','sb'],power:['p-board','pb'],prog:['pg-board','pgb']};
 function arShowChord(frets){ const v=document.querySelector('.tab[aria-selected=true]').dataset.view, m=AR_BOARD[v];
   if(m) $(m[0]).innerHTML=board(frets, m[1]); }
 function arRestoreBoard(){ const v=document.querySelector('.tab[aria-selected=true]').dataset.view;
-  ({chords:drawChords, strum:drawStrum, power:drawPower, prog:drawProg}[v]||(()=>{}))(); }
+  ({strum:drawChord, power:drawPower, prog:drawProg}[v]||(()=>{}))(); }
 function arSweep(t0, A, period, spb, doLoop){
   const px=AR.pxPerBeat; let lastKey='';
   const step=()=>{
@@ -1410,71 +1274,58 @@ window.addEventListener('load', arFit);
 </script>
 
 <script>
-/* ============ redesign glue: global Key, favorites sidebar, docked arranger ============
-   Reuses the engine functions/globals above; touches no tested logic. */
+/* ============ redesign glue: global Key + Tempo, favorites sidebar, docked arranger ============ */
 (function(){
-  var $ = function(id){ return document.getElementById(id); };
+  var $=function(id){return document.getElementById(id);};
+  arFit=function(){}; try{document.body.style.paddingBottom='';document.body.classList.remove('ar-open');}catch(e){}
+  AR.open=true; $('arranger').classList.add('open');
 
-  /* --- dock the arranger in the grid: kill fixed-layout padding, keep it always open --- */
-  arFit = function(){};                                  // was: reserve bottom padding for a fixed bar
-  try{ document.body.style.paddingBottom=''; document.body.classList.remove('ar-open'); }catch(e){}
-  AR.open = true; $('arranger').classList.add('open');
-
-  /* --- global Key drives In-key (keyPC/keyMode) and Inspire (pgStartPC/pgMode) --- */
-  function gkLabel(){ $('gk-name').textContent = NAMES[keyPC]; }
-  function gkRedraw(){ selectTonic(); drawChords(); drawProg(); buildProgList(); drawPower(); gkLabel(); }
-  $('gk-prev').onclick = function(){ keyPC=(keyPC+11)%12; pgStartPC=keyPC; gkRedraw(); };
-  $('gk-next').onclick = function(){ keyPC=(keyPC+1)%12;  pgStartPC=keyPC; gkRedraw(); };
+  function gkLabel(){ $('gk-name').textContent=NAMES[keyPC]; }
+  function gkRedraw(){ var d0=keyDegrees()[0]; sRoot=NAMES[d0.pc]; sQual=d0.quality;   // Chord follows the key's tonic on a key change
+    drawChord(); drawProg(); buildProgList(); drawPower(); gkLabel(); }
+  $('gk-prev').onclick=function(){ keyPC=(keyPC+11)%12; pgStartPC=keyPC; gkRedraw(); };
+  $('gk-next').onclick=function(){ keyPC=(keyPC+1)%12;  pgStartPC=keyPC; gkRedraw(); };
   function gkMode(m){ keyMode=m; pgMode=m;
-    $('gk-maj').setAttribute('aria-pressed', m==='maj'); $('gk-min').setAttribute('aria-pressed', m==='min');
-    $('c-major').setAttribute('aria-pressed', m==='maj'); $('c-minor').setAttribute('aria-pressed', m==='min');
-    $('pg-major').setAttribute('aria-pressed', m==='maj'); $('pg-minor').setAttribute('aria-pressed', m==='min');
-    gkRedraw(); }
-  $('gk-maj').onclick = function(){ gkMode('maj'); };
-  $('gk-min').onclick = function(){ gkMode('min'); };
+    $('gk-maj').setAttribute('aria-pressed',m==='maj'); $('gk-min').setAttribute('aria-pressed',m==='min'); gkRedraw(); }
+  $('gk-maj').onclick=function(){gkMode('maj');}; $('gk-min').onclick=function(){gkMode('min');};
   keyPC=0; pgStartPC=0; keyMode='maj'; pgMode='maj'; gkLabel();
 
-  /* --- header tempo mirrors the song (arranger) tempo, both ways --- */
+  function curView(){ var t=document.querySelector('.tab[aria-selected=true]'); return t?t.dataset.view:''; }
+  function retrigger(){ if(!T||T.btn===$('ar-play')) return; var v=curView();
+    if(v==='strum') playStrum(true); else if(v==='power') playPower(true); else if(v==='prog') playProg(true); }
   var gt=$('gtempo'); gt.value=AR.bpm; $('gtempov').textContent=AR.bpm;
   gt.oninput=function(e){ AR.bpm=+e.target.value; $('gtempov').textContent=e.target.value;
-    $('ar-bpm').value=e.target.value; $('ar-bpmv').textContent=e.target.value; arSave(); };
+    $('ar-bpm').value=e.target.value; $('ar-bpmv').textContent=e.target.value; arSave(); retrigger(); };
   var arb=$('ar-bpm'), arbOld=arb.oninput;
   arb.oninput=function(e){ if(arbOld) arbOld.call(arb,e); gt.value=e.target.value; $('gtempov').textContent=e.target.value; };
 
-  /* --- favorites sidebar (reuses favsGet/favsSet/loadFav/saveFav + refreshFavs) --- */
-  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   var favPending=null, favToastT=null;
   function favDelete(n){ var o=favsGet(); favPending={n:n,data:o[n]}; delete o[n]; favsSet(o);
     if(currentFav===n) currentFav=null; refreshFavs();
     $('fav-toast-msg').textContent='Deleted \u201c'+n+'\u201d'; $('fav-toast').classList.add('show');
-    clearTimeout(favToastT); favToastT=setTimeout(function(){ $('fav-toast').classList.remove('show'); favPending=null; },5000); }
-  $('fav-undo').onclick=function(){ if(favPending){ var o=favsGet(); o[favPending.n]=favPending.data; favsSet(o); favPending=null; refreshFavs(); } $('fav-toast').classList.remove('show'); };
-  function favRename(n){ var nn=(prompt('Rename song:', n)||'').trim(); if(!nn||nn===n) return;
-    var o=favsGet(); if(o[nn] && !confirm('Overwrite \u201c'+nn+'\u201d?')) return; o[nn]=o[n]; delete o[n]; favsSet(o);
+    clearTimeout(favToastT); favToastT=setTimeout(function(){$('fav-toast').classList.remove('show');favPending=null;},5000); }
+  $('fav-undo').onclick=function(){ if(favPending){var o=favsGet();o[favPending.n]=favPending.data;favsSet(o);favPending=null;refreshFavs();} $('fav-toast').classList.remove('show'); };
+  function favRename(n){ var nn=(prompt('Rename song:',n)||'').trim(); if(!nn||nn===n) return;
+    var o=favsGet(); if(o[nn]&&!confirm('Overwrite \u201c'+nn+'\u201d?')) return; o[nn]=o[n]; delete o[n]; favsSet(o);
     if(currentFav===n) currentFav=nn; refreshFavs(); }
   function renderFavSide(){
-    var favs=favsGet(), names=Object.keys(favs).sort(function(a,b){ return a.localeCompare(b); });
-    $('favcnt').textContent='('+names.length+')';
-    var host=$('favlist'); host.innerHTML='';
+    var favs=favsGet(), names=Object.keys(favs).sort(function(a,b){return a.localeCompare(b);});
+    $('favcnt').textContent='('+names.length+')'; var host=$('favlist'); host.innerHTML='';
     if(!names.length){ host.innerHTML='<div class="fav-empty">No saved songs yet. Build a song below, then press \u201cSave current song.\u201d</div>'; return; }
-    names.forEach(function(n){
-      var m=favs[n]||{}, blocks=(m.blocks||[]);
-      var bars=blocks.reduce(function(x,b){ return Math.max(x,(b.startBeat||0)+(b.lenBeats||0)); },0)/4;
+    names.forEach(function(n){ var m=favs[n]||{}, blocks=(m.blocks||[]);
+      var bars=blocks.reduce(function(x,b){return Math.max(x,(b.startBeat||0)+(b.lenBeats||0));},0)/4;
       var el=document.createElement('div'); el.className='fav'+(n===currentFav?' active':'');
       el.innerHTML='<div class="nm"><span class="star">&#9733;</span>'+esc(n)+'</div>'
         +'<div class="meta">'+blocks.length+' block'+(blocks.length===1?'':'s')+' \u00b7 '+(Math.round(bars*10)/10)+' bars</div>'
         +'<div class="favacts"><button class="fa-load">Load</button><button class="fa-ren">Rename</button><button class="fa-del">Delete</button></div>';
-      el.querySelector('.fa-load').onclick=function(){ loadFav(n); };
-      el.querySelector('.fa-ren').onclick=function(){ favRename(n); };
-      el.querySelector('.fa-del').onclick=function(){ favDelete(n); };
-      host.append(el);
-    });
+      el.querySelector('.fa-load').onclick=function(){loadFav(n);};
+      el.querySelector('.fa-ren').onclick=function(){favRename(n);};
+      el.querySelector('.fa-del').onclick=function(){favDelete(n);};
+      host.append(el); });
   }
-  var _rf=refreshFavs; refreshFavs=function(){ _rf(); renderFavSide(); };   // any fav change also repaints the sidebar
+  var _rf=refreshFavs; refreshFavs=function(){ _rf(); renderFavSide(); };
   $('fav-new').onclick=saveFav;
-  refreshFavs();
-
-  /* --- render the arranger now that it lives in the grid --- */
-  arRender();
+  refreshFavs(); arRender();
 })();
 </script>
