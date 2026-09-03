@@ -1117,7 +1117,10 @@ local function drawTimeline()
       local bw = b.bars * barW
       if mx>=bx and mx<bx+bw and my>=L.y+LOOP_H and my<L.y+L.h-15 then
         S.songSel = idx
-        if mx >= bx+bw-8 then songDragMode = 'stretch'
+        if mx >= bx+bw-18 and my < L.y+LOOP_H+18 then          -- the × in the top-right removes just this block
+          table.remove(S.song, idx); S.songSel, songDragMode = nil, nil
+          S.status = 'Removed a block  ·  '..#S.song..' left.'
+        elseif mx >= bx+bw-8 then songDragMode = 'stretch'
         else songDragMode, songDragOff = 'move', (S.songScroll + (mx-L.x)/barW) - b.startBar end
         break
       end
@@ -1191,7 +1194,8 @@ local function drawTimeline()
       box(vx0, L.y+LOOP_H+2, vx1-vx0, L.h-LOOP_H-15, KIND_COL[b.kind] or C.accent, true)
       box(vx0, L.y+LOOP_H+2, vx1-vx0, L.h-LOOP_H-15, sel and C.ink or C.bg, false)
       txt(b.label, vx0+6, L.y+LOOP_H+6, C.bg, 2)
-      if sel then box(vx1-6, L.y+LOOP_H+2, 6, L.h-LOOP_H-15, C.ink, true) end   -- stretch handle
+      if vx1-vx0 > 26 then txt('x', vx1-13, L.y+LOOP_H+3, C.bg, 2) end          -- per-block remove
+      if sel then box(vx1-6, L.y+LOOP_H+20, 6, L.h-LOOP_H-33, C.ink, true) end  -- stretch handle (below the ×)
     end
   end
 
@@ -1436,7 +1440,7 @@ local function draw(dh)
     tx = tx - w; local hit_ = button(tx, sy, w, 26, label, primary); tx = tx - 6; return hit_
   end
   if rbtn(72, S.loop and 'loop: on' or 'loop: off', S.loop) then S.loop = not S.loop end
-  if rbtn(80, 'Clear') then S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; stopAudition(); S.status='Song cleared.' end
+  if rbtn(104, 'Clear song') then S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; stopAudition(); S.status='Song cleared.' end
   if rbtn(140, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
   if rbtn(104, playing and S.playSong and 'Stop' or 'Play song') then
     if playing and S.playSong then stopAudition() else audition(true) end
