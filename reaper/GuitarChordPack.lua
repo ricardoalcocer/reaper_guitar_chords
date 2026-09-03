@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.14.2+1ab519b
+  @version 2.14.3+0fa0871
 --]]
 
-local VERSION = "2.14.2+1ab519b"
+local VERSION = "2.14.3+0fa0871"
 
 ----------------------------------------------------------------------
 -- data
@@ -1637,9 +1637,7 @@ local function draw(dh)
   local function rbtn(w, label, primary)
     tx = tx - w; local hit_ = button(tx, sy, w, 26, label, primary); tx = tx - 6; return hit_
   end
-  local hasLoop = S.loopA and S.loopB and S.loopB > S.loopA
   if rbtn(60, S.loop and 'loop: on' or 'loop: off', S.loop) then S.loop = not S.loop end
-  if hasLoop and rbtn(78, 'Clear loop') then S.loopA, S.loopB = nil, nil; S.status='Loop cleared.' end
   if rbtn(58, 'Undo') then songUndoPop() end
   if rbtn(96, 'Clear song') then songSnapshot(); S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; stopAudition(); S.status='Song cleared  ·  Undo to restore.' end
   if rbtn(132, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
