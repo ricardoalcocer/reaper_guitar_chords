@@ -236,7 +236,7 @@
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.12.9+d2c4f84</span></div>
+    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.13.0+04ec035</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>
@@ -357,6 +357,7 @@
         <button class="btn toggle" id="ar-loop" aria-pressed="false">Loop</button>
         <button class="btn toggle" id="ar-metro" aria-pressed="false" title="Metronome click while the song plays">Click</button>
         <button class="btn" id="ar-export">Export MIDI</button>
+        <button class="btn" id="ar-undo" title="Undo the last arranger change (Z)">Undo</button>
         <button class="btn" id="ar-clear" title="Remove ALL blocks — use the × on a block to remove just one">Clear song
         <span id="ar-favhost" hidden>
           <label class="ctl">Tempo <input type="range" id="ar-bpm" min="60" max="200" value="120"><span id="ar-bpmv">120</span></label>
@@ -1091,6 +1092,12 @@ buildRiffScales(); buildRiffPats(); drawRiff();
 
 /* ==================== ARRANGER: SONG TRACK (DOM) ==================== */
 const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false, loopA:null, loopB:null, metro:false };
+// arranger undo: snapshot before each edit so a wrong drag/delete/clear is one step back
+let arUndo = [];
+function arSnapshot(){ try{ const s=JSON.stringify(songData());
+  if(arUndo[arUndo.length-1]!==s){ arUndo.push(s); if(arUndo.length>60) arUndo.shift(); } }catch(e){} }
+function arUndoPop(){ if(!arUndo.length){ arMsg('Nothing to undo.'); return; }
+  arStopIfPlaying(); applySong(JSON.parse(arUndo.pop())); arRender(); arSave(); arMsg('Undone.'); }
 const arLane = $('ar-lane'), arRuler = $('ar-ruler'), arHead = $('ar-playhead'), arScroll = $('ar-scroll');
 function arMsg(t){ $('ar-msg').textContent = t||''; }
 // playback holds a snapshot of the notes, so any change to the block set must stop it
@@ -1155,7 +1162,7 @@ function arRender(){
   arFit();
 }
 function arAdd(cap){
-  arStopIfPlaying();
+  arStopIfPlaying(); arSnapshot();
   const b = Object.assign({id:++AR.seq, startBeat:arEndBeat()}, cap);
   b.lenBeats = blockLoopBeats(b);                          // its own length
   AR.blocks.push(b); arRender(); arSave();
@@ -1179,8 +1186,8 @@ $('r-add').onclick=()=>arAdd(capRiff());
    a brief hold-then-drag moves the block (or resizes it from the right grip). Auto-scrolls at edges. */
 function arWireBlock(el,b){
   const px=()=>AR.pxPerBeat, sc=$('ar-scroll');
-  el.querySelector('.ar-rm').onclick=(e)=>{ e.stopPropagation(); arStopIfPlaying();
-    AR.blocks=AR.blocks.filter(x=>x!==b); arRender(); arSave(); arMsg('Removed a block.'); };
+  el.querySelector('.ar-rm').onclick=(e)=>{ e.stopPropagation(); arStopIfPlaying(); arSnapshot();
+    AR.blocks=AR.blocks.filter(x=>x!==b); arRender(); arSave(); arMsg('Removed a block — Undo to restore.'); };
   el.onpointerdown=(e)=>{
     if(e.target.classList.contains('ar-rm')) return;
     const onGrip = e.target.classList.contains('ar-grip');
@@ -1188,7 +1195,7 @@ function arWireBlock(el,b){
     const x0=e.clientX, len0=b.lenBeats, beat0=b.startBeat, sl0=sc.scrollLeft;
     let mode = touch ? null : (onGrip ? 'resize' : 'move');   // touch decides on first move / hold
     try{ el.setPointerCapture(e.pointerId); }catch(_){}
-    const begin=()=>{ arStopIfPlaying(); if(mode==='move') el.classList.add('drag'); };
+    const begin=()=>{ arStopIfPlaying(); arSnapshot(); if(mode==='move') el.classList.add('drag'); };
     if(!touch){ e.preventDefault(); begin(); }
     const hold = touch ? setTimeout(()=>{ if(mode===null){ mode=onGrip?'resize':'move'; begin(); } }, 220) : null;
     const mv=(ev)=>{
@@ -1200,8 +1207,6 @@ function arWireBlock(el,b){
         el.style.width=Math.max(20,(b.lenBeats*px()-2))+'px';
         el.querySelector('.ar-sub').textContent=fmtLen(b.lenBeats)+artTag(b)+loopTag(b); }
       else { b.startBeat=Math.max(0, beat0+Math.round(dx/px())); el.style.left=(b.startBeat*px())+'px'; }
-      const box=sc.getBoundingClientRect();                     // auto-scroll near the edges while dragging
-      if(ev.clientX>box.right-30) sc.scrollLeft+=14; else if(ev.clientX<box.left+30) sc.scrollLeft=Math.max(0,sc.scrollLeft-14);
     };
     const up=()=>{ clearTimeout(hold);
       el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up); el.removeEventListener('pointercancel',up);
@@ -1267,8 +1272,11 @@ $('ar-ruler').onpointerdown=(e)=>{ e.preventDefault(); arStopIfPlaying();
     arSave(); };
   r.addEventListener('pointermove',mv); r.addEventListener('pointerup',up); r.addEventListener('pointercancel',up);
 };
-$('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; arStopIfPlaying(); AR.blocks=[]; AR.loopA=AR.loopB=null;
-  currentFav=null; refreshFavs(); arRender(); arSave(); arMsg('Cleared.'); };
+$('ar-clear').onclick=()=>{ if(!AR.blocks.length) return; arStopIfPlaying(); arSnapshot(); AR.blocks=[]; AR.loopA=AR.loopB=null;
+  currentFav=null; refreshFavs(); arRender(); arSave(); arMsg('Cleared — Undo to restore.'); };
+$('ar-undo').onclick=arUndoPop;
+document.addEventListener('keydown', e=>{ if(/INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  if((e.metaKey||e.ctrlKey) && (e.key==='z'||e.key==='Z')){ e.preventDefault(); arUndoPop(); } });
 
 /* play the song (or just the loop range) through the transport; a playhead sweeps the window */
 function arPlay(){

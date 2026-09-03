@@ -626,6 +626,19 @@ local function songDeserialize(str)
   end
   return song
 end
+-- arranger undo: snapshot the song before each edit (reusing the serializer), so a wrong drag or
+-- delete is one click back. The project isn't touched, so this is the song lane's own history.
+local songUndo = {}
+local function songSnapshot()
+  local s = songSerialize()
+  if songUndo[#songUndo] ~= s then songUndo[#songUndo+1] = s; if #songUndo > 50 then table.remove(songUndo, 1) end end
+end
+local function songUndoPop()
+  if #songUndo == 0 then S.status = 'Nothing to undo.'; return end
+  S.song, S.songSel = songDeserialize(songUndo[#songUndo]), nil
+  table.remove(songUndo)
+  S.status = 'Undone  ·  '..#S.song..' block'..(#S.song==1 and '' or 's')..' now.'
+end
 local function currentDia()
   local f = currentFrets()
   local s = ''
@@ -1118,10 +1131,11 @@ local function drawTimeline()
       if mx>=bx and mx<bx+bw and my>=L.y+LOOP_H and my<L.y+L.h-15 then
         S.songSel = idx
         if mx >= bx+bw-18 and my < L.y+LOOP_H+18 then          -- the × in the top-right removes just this block
+          songSnapshot()
           table.remove(S.song, idx); S.songSel, songDragMode = nil, nil
-          S.status = 'Removed a block  ·  '..#S.song..' left.'
-        elseif mx >= bx+bw-8 then songDragMode = 'stretch'
-        else songDragMode, songDragOff = 'move', (S.songScroll + (mx-L.x)/barW) - b.startBar end
+          S.status = 'Removed a block  ·  '..#S.song..' left  ·  Undo to restore.'
+        elseif mx >= bx+bw-8 then songSnapshot(); songDragMode = 'stretch'
+        else songSnapshot(); songDragMode, songDragOff = 'move', (S.songScroll + (mx-L.x)/barW) - b.startBar end
         break
       end
     end
@@ -1439,10 +1453,11 @@ local function draw(dh)
   local function rbtn(w, label, primary)
     tx = tx - w; local hit_ = button(tx, sy, w, 26, label, primary); tx = tx - 6; return hit_
   end
-  if rbtn(72, S.loop and 'loop: on' or 'loop: off', S.loop) then S.loop = not S.loop end
-  if rbtn(104, 'Clear song') then S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; stopAudition(); S.status='Song cleared.' end
-  if rbtn(140, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
-  if rbtn(104, playing and S.playSong and 'Stop' or 'Play song') then
+  if rbtn(60, S.loop and 'loop: on' or 'loop: off', S.loop) then S.loop = not S.loop end
+  if rbtn(58, 'Undo') then songUndoPop() end
+  if rbtn(96, 'Clear song') then songSnapshot(); S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; stopAudition(); S.status='Song cleared  ·  Undo to restore.' end
+  if rbtn(132, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
+  if rbtn(96, playing and S.playSong and 'Stop' or 'Play song') then
     if playing and S.playSong then stopAudition() else audition(true) end
   end
   drawTimeline()
@@ -1497,7 +1512,7 @@ local function draw(dh)
   if button(WX+102, ty, 116, 30, 'Insert at cursor') then S.playSong=false; insertAtCursor() end
   if button(WX+224, ty, 84, 30, 'Save .mid') then exportMidi() end
   if button(WX+314, ty, 104, 30, 'Set up track') then setupTrack() end
-  if button(WX+424, ty, 116, 30, '+ Add to Song', true) then addToSong(tabKind()) end
+  if button(WX+424, ty, 116, 30, '+ Add to Song', true) then songSnapshot(); addToSong(tabKind()) end
   if chip(WX+548, ty+2, 68, 26, S.loop and 'loop: on' or 'loop: off', S.loop, 2) then S.loop = not S.loop end
 
   -- ---- per-source selectors ----
