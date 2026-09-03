@@ -1,7 +1,8 @@
 --[[
-  Guitar Chord Pack - audition and insert
-  @description Browse guitar-voiced chords, audition them through the selected
-               track's instrument, and insert them as MIDI at the edit cursor.
+  Guitar Songwriter - audition, arrange and insert
+  @description Guitar Songwriter: audition chords, power chords, progressions and
+               procedural riffs through the selected track's instrument, arrange
+               them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
   @version __VERSION__
 --]]
@@ -1153,7 +1154,7 @@ local BOARD_MAX_EXTRA = 70
 -- STABLE title (no version): REAPER remembers a gfx window's position by its title, so
 -- the version lives in the status bar instead — otherwise every build looks like a new
 -- window and its remembered position is lost. We set the size (for zoom); REAPER the spot.
-local TITLE  = 'Guitar Chord Pack'
+local TITLE  = 'Guitar Songwriter'
 local CANVAS = 0                  -- offscreen image the UI is drawn into, then blitted
 
 -- EZdrummer-style zoom: the UI is drawn at the 720x812 canvas and blitted to fill the
@@ -1321,7 +1322,7 @@ local function drawHeader()
   gfx.setfont(3); local kx = PADX + gfx.measurestr('Guitar Songwriter') + 34   -- KEY sits just past the title
   txt('KEY', kx, 20, C.mute, 2)
   if button(kx+32, 12, 26, 28, '<') then S.keyPC = (S.keyPC + 11) % 12 end
-  txtc(NAMES[S.keyPC+1], kx+60, 18, 40, C.ink, 3)
+  txtc(NAMES[S.keyPC+1], kx+60, 15, 40, C.ink, 3)   -- font 3 is taller; lift it to sit centred with the arrows
   if button(kx+102, 12, 26, 28, '>') then S.keyPC = (S.keyPC + 1) % 12 end
   if chip(kx+136, 12, 56, 28, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
   if chip(kx+194, 12, 56, 28, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
