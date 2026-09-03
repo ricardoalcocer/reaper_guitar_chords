@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.12.2+622e574
+  @version 2.12.3+d78b77f
 --]]
 
-local VERSION = "2.12.2+622e574"
+local VERSION = "2.12.3+d78b77f"
 
 ----------------------------------------------------------------------
 -- data
@@ -1605,6 +1605,7 @@ local function draw(dh)
   if button(WX+224, ty, 84, 30, 'Save .mid') then exportMidi() end
   if button(WX+314, ty, 104, 30, 'Set up track') then setupTrack() end
   if button(WX+424, ty, 116, 30, '+ Add to Song', true) then addToSong(tabKind()) end
+  if chip(WX+548, ty+2, 68, 26, S.loop and 'loop: on' or 'loop: off', S.loop, 2) then S.loop = not S.loop end
 
   -- ---- per-source selectors ----
   local y = ty + 46

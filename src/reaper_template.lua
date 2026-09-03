@@ -1431,6 +1431,7 @@ local function draw(dh)
   if button(WX+224, ty, 84, 30, 'Save .mid') then exportMidi() end
   if button(WX+314, ty, 104, 30, 'Set up track') then setupTrack() end
   if button(WX+424, ty, 116, 30, '+ Add to Song', true) then addToSong(tabKind()) end
+  if chip(WX+548, ty+2, 68, 26, S.loop and 'loop: on' or 'loop: off', S.loop, 2) then S.loop = not S.loop end
 
   -- ---- per-source selectors ----
   local y = ty + 46
