@@ -145,14 +145,14 @@
 </style>
 <style id="redesign">
   /* ============ redesign shell (overrides only; engine CSS above is untouched) ============ */
-  html,body{height:100%}
+  html,body{height:100%;overscroll-behavior:none}   /* no iOS rubber-band that hints at content above */
   body{margin:0 !important;padding:0 !important;overflow:hidden}
   body.ar-open{padding:0 !important}                 /* cancel the old fixed-arranger padding */
   #app{display:grid;height:100vh;height:100dvh;grid-template-columns:266px minmax(0,1fr);   /* dvh keeps us above the iOS address bar */
        grid-template-rows:auto minmax(0,1fr) minmax(148px,188px);
        grid-template-areas:"side head" "side work" "side song";gap:1px;background:var(--line)}
   #side{grid-area:side;background:var(--panel);display:flex;flex-direction:column;min-height:0}
-  #head{grid-area:head;background:var(--panel);display:flex;align-items:center;gap:14px;padding:env(safe-area-inset-top) 16px 0;min-height:54px;flex-wrap:wrap}   /* clear the iOS status bar / notch */
+  #head{grid-area:head;background:var(--panel);display:flex;align-items:center;gap:14px;padding:max(env(safe-area-inset-top),12px) 16px 10px;min-height:54px;flex-wrap:wrap}   /* always a clear top gap; clears the iOS status bar / notch */
   #work{grid-area:work;min-height:0;overflow-y:auto;background:var(--bg)}
   #song{grid-area:song;min-height:0;background:var(--panel);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}   /* clear the iOS home indicator */
 
@@ -236,7 +236,7 @@
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.12.7+c02f3e4</span></div>
+    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.12.8+c3ce518</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>
@@ -1174,27 +1174,39 @@ $('pg-add').onclick=()=>{ const c=capProg(); if(c) arAdd(c); else arMsg('No prog
 $('r-add').onclick=()=>arAdd(capRiff());
 
 /* per-block drag (reposition), edge-resize (add/remove beats), remove — all snap to the beat */
+/* One pointer handler per block. On a MOUSE it moves/resizes immediately (precise). On TOUCH it
+   waits: a quick horizontal swipe scrolls the timeline (so you can reach off-screen blocks), while
+   a brief hold-then-drag moves the block (or resizes it from the right grip). Auto-scrolls at edges. */
 function arWireBlock(el,b){
-  const px=()=>AR.pxPerBeat;
+  const px=()=>AR.pxPerBeat, sc=$('ar-scroll');
   el.querySelector('.ar-rm').onclick=(e)=>{ e.stopPropagation(); arStopIfPlaying();
     AR.blocks=AR.blocks.filter(x=>x!==b); arRender(); arSave(); arMsg('Removed a block.'); };
-  const grip=el.querySelector('.ar-grip');
-  grip.onpointerdown=(e)=>{ e.stopPropagation(); e.preventDefault(); arStopIfPlaying();
-    const x0=e.clientX, len0=b.lenBeats; try{ grip.setPointerCapture(e.pointerId); }catch(_){}
-    const mv=(ev)=>{ b.lenBeats=Math.max(1, len0+Math.round((ev.clientX-x0)/px()));
-                     el.style.width=Math.max(20,(b.lenBeats*px()-2))+'px';
-                     el.querySelector('.ar-sub').textContent=fmtLen(b.lenBeats)+artTag(b)+loopTag(b); };
-    const up=()=>{ grip.removeEventListener('pointermove',mv); grip.removeEventListener('pointerup',up);
-                   grip.removeEventListener('pointercancel',up); arReflow(); arRender(); arSave(); };
-    grip.addEventListener('pointermove',mv); grip.addEventListener('pointerup',up); grip.addEventListener('pointercancel',up);
-  };
   el.onpointerdown=(e)=>{
-    if(e.target.classList.contains('ar-grip')||e.target.classList.contains('ar-rm')) return;
-    e.preventDefault(); arStopIfPlaying(); el.classList.add("drag"); try{ el.setPointerCapture(e.pointerId); }catch(_){}
-    const x0=e.clientX, beat0=b.startBeat;
-    const mv=(ev)=>{ b.startBeat=Math.max(0, beat0+Math.round((ev.clientX-x0)/px())); el.style.left=(b.startBeat*px())+'px'; };
-    const up=()=>{ el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up);
-                   el.removeEventListener('pointercancel',up); el.classList.remove('drag'); arReflow(); arRender(); arSave(); };
+    if(e.target.classList.contains('ar-rm')) return;
+    const onGrip = e.target.classList.contains('ar-grip');
+    const touch  = e.pointerType==='touch';
+    const x0=e.clientX, len0=b.lenBeats, beat0=b.startBeat, sl0=sc.scrollLeft;
+    let mode = touch ? null : (onGrip ? 'resize' : 'move');   // touch decides on first move / hold
+    try{ el.setPointerCapture(e.pointerId); }catch(_){}
+    const begin=()=>{ arStopIfPlaying(); if(mode==='move') el.classList.add('drag'); };
+    if(!touch){ e.preventDefault(); begin(); }
+    const hold = touch ? setTimeout(()=>{ if(mode===null){ mode=onGrip?'resize':'move'; begin(); } }, 220) : null;
+    const mv=(ev)=>{
+      const dx=ev.clientX-x0;
+      if(mode===null){ if(Math.abs(dx)>8){ mode='scroll'; clearTimeout(hold); } else return; }
+      if(mode==='scroll'){ sc.scrollLeft = sl0 - dx; return; }   // swipe pans the timeline
+      if(ev.cancelable) ev.preventDefault();
+      if(mode==='resize'){ b.lenBeats=Math.max(1, len0+Math.round(dx/px()));
+        el.style.width=Math.max(20,(b.lenBeats*px()-2))+'px';
+        el.querySelector('.ar-sub').textContent=fmtLen(b.lenBeats)+artTag(b)+loopTag(b); }
+      else { b.startBeat=Math.max(0, beat0+Math.round(dx/px())); el.style.left=(b.startBeat*px())+'px'; }
+      const box=sc.getBoundingClientRect();                     // auto-scroll near the edges while dragging
+      if(ev.clientX>box.right-30) sc.scrollLeft+=14; else if(ev.clientX<box.left+30) sc.scrollLeft=Math.max(0,sc.scrollLeft-14);
+    };
+    const up=()=>{ clearTimeout(hold);
+      el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up); el.removeEventListener('pointercancel',up);
+      el.classList.remove('drag');
+      if(mode==='resize'||mode==='move'){ arReflow(); arRender(); arSave(); } };
     el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up);
   };
 }
