@@ -22,6 +22,7 @@ test: all
 	@lua5.4 tests/dump_analysis.lua >/dev/null && node tests/test_parity.js
 	@node tests/test_arranger.js
 	@lua5.4 tests/dump_riffs.lua >/dev/null && node tests/test_riffs_web.js
+	@lua5.4 tests/dump_inversions.lua >/dev/null && node tests/test_inversions_web.js
 
 packs:
 	@python3 src/gen_chords.py

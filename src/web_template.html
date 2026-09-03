@@ -277,6 +277,8 @@
           <div class="chips" id="c-diatonic"></div>
           <p class="eyebrow" style="margin-top:14px">Any root</p><div class="chips" id="s-roots"></div>
           <p class="eyebrow" style="margin-top:14px">Any quality</p><div class="chips" id="s-quals"></div>
+          <p class="eyebrow" id="s-inv-lbl" style="margin-top:14px">Inversion &mdash; which chord tone is in the bass</p>
+          <div class="chips" id="s-invs"></div>
         </div>
       </div>
 
@@ -391,6 +393,92 @@ const ROOTS = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
 const QUALS = [['maj','maj'],['m','m'],['7','7'],['m7','m7'],['maj7','maj7'],['m7b5','m7b5'],
   ['dim7','dim7'],['dim','dim'],['aug','aug'],['sus2','sus2'],['sus4','sus4'],['7sus4','7sus4'],
   ['6','6'],['m6','m6'],['9','9'],['add9','add9']];
+
+
+/* ---------- chord inversions (mirror of invertShape in src/reaper_template.lua) ----------
+   REAL, hand-playable fret shapes with the 3rd/5th/7th in the bass. We search for a voicing
+   a hand can actually grab (span <= 4 frets, <= 4 fingers) and return null when none exists,
+   so the UI never offers an unplayable inversion. Muted strings are null (fret 0 is open).
+   This is an audition-only control on the Chord source, exactly as in the REAPER script:
+   inversion drives the board/preview but is NOT persisted into a song block. */
+const INV_QUALS = { maj:1, m:1, '7':1, m7:1, maj7:1, '6':1, m6:1, dim:1, aug:1, m7b5:1, dim7:1, mMaj7:1 };
+const FIFTHS = { 6:1, 7:1, 8:1 };                       // dim / perfect / aug 5th intervals
+
+// a hand can reach it: fretted span within 4, no more than four fingers (a barre is one)
+function playableShape(frets){
+  let hi=0, lo=99, n=0; const fingers={};
+  for(let i=0;i<6;i++){ const f=frets[i];
+    if(f!=null && f>0){ if(f>hi)hi=f; if(f<lo)lo=f; if(!fingers[f]){ fingers[f]=1; n++; } } }
+  if(hi===0) return true;
+  return (hi-lo<=4) && (n<=4);
+}
+
+// best playable shape whose lowest note is bassPc and which sounds every pc in needList; null
+// if none. Bass sits on strings 0..3, higher strings within a hand span. Deterministic search
+// order (bs, fb, then mute-first then f ascending) so this matches the Lua tie-breaking exactly.
+function searchInversion(rootPc, needList, bassPc){
+  const need={}; needList.forEach(pc=>need[pc]=1);
+  let best=null;
+  const frets=[null,null,null,null,null,null];
+  for(let bs=0;bs<4;bs++){
+    for(let fb=0;fb<=12;fb++){
+      if((OPEN[bs]+fb)%12===bassPc){
+        const bassPitch=OPEN[bs]+fb;
+        for(let i=0;i<6;i++) frets[i]=null;
+        frets[bs]=fb;
+        const rec=str=>{
+          if(str>5){
+            const have={}; let hi=0, sounding=0;
+            for(let i=0;i<6;i++){ if(frets[i]!=null){
+              const p=OPEN[i]+frets[i]; have[p%12]=1; sounding++;
+              if(frets[i]>hi) hi=frets[i]; } }
+            for(const pc of needList){ if(!have[pc]) return; }
+            if(!playableShape(frets)) return;
+            const score=sounding*100 - hi*4;            // fuller and lower scores higher
+            if(!best || score>best.score) best={frets:frets.slice(), score};
+            return;
+          }
+          frets[str]=null; rec(str+1);                  // mute this string
+          for(let f=0;f<=14;f++){                        // or a chord tone above the bass
+            const pitch=OPEN[str]+f;
+            if(need[pitch%12] && pitch>bassPitch && (f===0 || (f>=fb-1 && f<=fb+4))){
+              let dup=false;
+              for(let i=0;i<str;i++){ if(frets[i]!=null && OPEN[i]+frets[i]===pitch){ dup=true; break; } }
+              if(!dup){ frets[str]=f; rec(str+1); frets[str]=null; }
+            }
+          }
+        };
+        rec(bs+1);
+      }
+    }
+  }
+  return best ? best.frets : null;
+}
+
+// inv 0 = root position (the stored shape). 1/2/3 put the 3rd/5th/7th in the bass; returns
+// null when no playable shape exists. Cached, since it is polled while redrawing.
+const _invCache={};
+function invertShape(root, qual, inv){
+  if(inv===0 || !INV_QUALS[qual]) return CHORDS[root][qual].frets;
+  const key=root+'|'+qual+'|'+inv;
+  if(key in _invCache) return _invCache[key];
+  const base=CHORDS[root][qual].frets, rootPc=NAMES.indexOf(root);
+  const seen={}, ivs=[];
+  for(let i=0;i<6;i++){ if(base[i]!=null){
+    const pc=(OPEN[i]+base[i])%12; if(!seen[pc]){ seen[pc]=1; ivs.push((pc-rootPc+12)%12); } } }
+  ivs.sort((a,b)=>a-b);
+  const tgtIv=ivs[inv];                                  // inv-th chord tone becomes the bass
+  if(tgtIv==null){ _invCache[key]=null; return null; }
+  const bassPc=(rootPc+tgtIv)%12;
+  // required tones: every chord tone, but the 5th may drop unless it is the bass
+  const needList=[], added={};
+  for(let i=0;i<6;i++){ if(base[i]!=null){
+    const pc=(OPEN[i]+base[i])%12;
+    if((pc===bassPc || !FIFTHS[(pc-rootPc+12)%12]) && !added[pc]){ added[pc]=1; needList.push(pc); } } }
+  const shape=searchInversion(rootPc, needList, bassPc);
+  _invCache[key]=shape;
+  return shape;
+}
 
 
 /* ---------- functional harmony ---------- */
@@ -906,17 +994,39 @@ function keyDegrees(){
 }
 
 /* ---------- CHORD source: single chord, free root+quality, in-key suggestions ---------- */
-let sRoot='C', sQual='maj', sPat='classic';
+let sRoot='C', sQual='maj', sPat='classic', sInv=0;
+// the frets we audition: the selected inversion if it has a playable shape, else root position
+// (audition-only, exactly like currentFrets() in the REAPER script — inversion is not stored in a block)
+function sFrets(){ return (sInv>0 && invertShape(sRoot,sQual,sInv)) || CHORDS[sRoot][sQual].frets; }
+const INV_LABELS=['root','1st','2nd','3rd'];        // 0..3: root position, then 3rd/5th/7th in the bass
 function drawChord(){
+  if(sInv>0 && !invertShape(sRoot,sQual,sInv)) sInv=0;   // fall back if this chord can't take that inversion
   const d=CHORDS[sRoot][sQual];
   $('s-name').textContent=d.label; $('s-dia').textContent=d.dia;
   const a=analyze(keyPC,keyMode,NAMES.indexOf(sRoot),sQual);
   $('c-num').textContent=a.numeral;
   $('c-func').innerHTML=`${a.func} <span>&mdash; ${a.note}, in ${NAMES[keyPC]} ${keyMode==='maj'?'major':'minor'}</span>`;
-  $('s-board').innerHTML=board(d.frets,'sb');
+  $('s-board').innerHTML=board(sFrets(),'sb');
   [...$('s-roots').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===sRoot));
   [...$('s-quals').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===sQual));
+  drawInvs();
   drawDiatonic();
+}
+// inversion chips: root is always offered; 1st/2nd/3rd only when a playable shape exists for this chord
+function drawInvs(){
+  const host=$('s-invs'); if(!host) return; host.innerHTML='';
+  const canInvert=!!INV_QUALS[sQual];
+  $('s-inv-lbl').style.display=canInvert?'':'none';
+  host.style.display=canInvert?'':'none';
+  if(!canInvert) return;
+  for(let iv=0;iv<4;iv++){
+    const avail = iv===0 || invertShape(sRoot,sQual,iv)!=null;
+    const b=document.createElement('button'); b.className='chip'; b.dataset.v=iv;
+    b.textContent=INV_LABELS[iv]; b.setAttribute('aria-pressed', iv===sInv);
+    if(!avail){ b.disabled=true; b.style.opacity=.35; b.title='no playable shape for this chord'; }
+    else b.onclick=()=>{ sInv=iv; drawChord(); T?playStrum(true):chordPreview(); };
+    host.append(b);
+  }
 }
 function drawDiatonic(){
   const host=$('c-diatonic'); if(!host) return; host.innerHTML='';
@@ -927,7 +1037,7 @@ function drawDiatonic(){
     host.append(b); });
 }
 function chordPreview(){ stopAll(); audio(); if(ctx.state==='suspended') ctx.resume();
-  stroke(CHORDS[sRoot][sQual].frets,'D', ctx.currentTime+.05, .6, false, lighter('sb')); }
+  stroke(sFrets(),'D', ctx.currentTime+.05, .6, false, lighter('sb')); }
 ROOTS.forEach(r=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=r;
   b.textContent=r; b.onclick=()=>{ sRoot=r; drawChord(); T?playStrum(true):chordPreview(); }; $('s-roots').append(b); });
 // every voicing quality in the data — so any chord a progression can use is pickable here too
@@ -950,7 +1060,7 @@ function playStrum(force){
   const pat=STRUM_PATS[sPat], bpm=tempo(), lit=lighter('sb');
   const cells=[...$('s-pats').querySelectorAll('.pat[aria-pressed=true] .cell')];
   start($('s-play'), cells, (i,when)=>{ const slot=i%8, spb=60/bpm, dur=spb/2, k=pat[slot];
-    if(k) stroke(CHORDS[sRoot][sQual].frets, k, when, spb, false, lit); return {slot, dur}; });
+    if(k) stroke(sFrets(), k, when, spb, false, lit); return {slot, dur}; });
 }
 $('s-play').onclick=()=>playStrum();
 
