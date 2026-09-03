@@ -19,7 +19,7 @@ ORDER = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 # hash of the shared sources (below), so two builds can never look identical even
 # if you forget to bump. The full string is stamped into BOTH deliverables, so
 # matching stamps confirm the REAPER script and the browser tool are the same build.
-VERSION_BASE = '2.12.3'
+VERSION_BASE = '2.12.4'
 
 # every source that feeds either deliverable; the hash changes iff one of these does
 _HASH_INPUTS = ['reaper_template.lua', 'web_template.html', 'harmony.lua',

@@ -641,6 +641,7 @@ end
 ----------------------------------------------------------------------
 local sched, playing, nextStart, lit = {}, false, 0, {}
 local playBarStarts = {}          -- audio-clock start time of each bar in the queued sequence
+local songPlayOff = 0             -- first bar of the queued window (nonzero when looping a region)
 
 local function panic()
   for ch=0,0 do reaper.StuffMIDIMessage(0, 0xB0+ch, 123, 0) end
@@ -656,7 +657,15 @@ local function queueBar(t0)
   local bqn  = barQN()
   local t = t0
   playBarStarts = {}
-  for _,evlist in ipairs(eventBars(bqn)) do
+  local bars = eventBars(bqn)
+  songPlayOff = 0
+  -- looping a chosen region of the song: queue only those bars; the re-queue then repeats them
+  if S.playSong and S.loop and S.loopA and S.loopB and S.loopB > S.loopA then
+    local sub = {}
+    for i = S.loopA + 1, math.min(S.loopB, #bars) do sub[#sub+1] = bars[i] end
+    if #sub > 0 then bars = sub; songPlayOff = S.loopA end
+  end
+  for _,evlist in ipairs(bars) do
     playBarStarts[#playBarStarts+1] = t
     for _,e in ipairs(evlist) do
       sched[#sched+1] = {t=t + e.qn*spqn, on=true,  pitch=e.pitch, vel=e.vel, str=e.str}
@@ -775,10 +784,10 @@ local function serviceAudio()
     end
   end
   if playing then
-    local isPattern = currentArt().p ~= nil
-    if isPattern and S.loop and now > nextStart - 0.12 then
+    local loops = (currentArt().p ~= nil or S.playSong) and S.loop   -- patterns and the song re-queue
+    if loops and now > nextStart - 0.12 then
       queueBar(nextStart)
-    elseif #sched == 0 and (not isPattern or not S.loop) then
+    elseif #sched == 0 and not loops then
       playing = false
     end
   end
@@ -908,6 +917,7 @@ end
 local mousePrev, clicked, mx, my = 0, false, 0, 0
 local pressed, released, held = false, false, false   -- mouse edges/state for dragging
 local songDragMode, songDragOff = nil, 0              -- timeline drag: 'move' | 'stretch'
+local songLoopDrag = nil                              -- loop-region drag: 'l' | 'r' | 'move' | 'new'
 local progListRect = nil     -- {x,y,w,h} of the progression list, for wheel scrolling
 local function hit(x,y,w,h) return mx>=x and mx<x+w and my>=y and my<y+h end
 local function chip(x,y,w,h,label,on,font)
@@ -1082,18 +1092,27 @@ end
 -- draw agree.
 local LANE = {x=20, y=150, w=680, h=84, view=16}
 local function laneBarW() return LANE.w / LANE.view end
+local LOOP_H = 14                                   -- top strip of the lane = the loop-region ruler
 local function drawTimeline()
   local L, barW = LANE, laneBarW()
   box(L.x, L.y, L.w, L.h, C.panel, true)
+  local barAt = function(x) return math.max(0, math.floor((x - L.x)/barW + S.songScroll + 0.5)) end
 
-  -- grab / drag input, resolved before drawing so the visuals reflect this frame
-  if pressed and hit(L.x, L.y, L.w, L.h) then
+  -- input, resolved before drawing. TOP strip = loop region (edge-aware); below it = blocks.
+  if pressed and hit(L.x, L.y, L.w, LOOP_H) then
+    S.songSel, songDragMode = nil, nil
+    local press, hasR = barAt(mx), (S.loopA and S.loopB and S.loopB > S.loopA)
+    if     hasR and math.abs(press - S.loopA) <= 0.6 then songLoopDrag = 'l'
+    elseif hasR and math.abs(press - S.loopB) <= 0.6 then songLoopDrag = 'r'
+    elseif hasR and press > S.loopA and press < S.loopB then songLoopDrag, songDragOff = 'move', press - S.loopA
+    else   songLoopDrag, S.loopA, S.loopB = 'new', press, press end
+  elseif pressed and hit(L.x, L.y+LOOP_H, L.w, L.h-LOOP_H) then
     S.songSel, songDragMode = nil, nil
     for idx=#S.song,1,-1 do                      -- topmost block under the cursor wins
       local b  = S.song[idx]
       local bx = L.x + (b.startBar - S.songScroll) * barW
       local bw = b.bars * barW
-      if mx>=bx and mx<bx+bw and my>=L.y+6 and my<L.y+L.h-18 then
+      if mx>=bx and mx<bx+bw and my>=L.y+LOOP_H and my<L.y+L.h-15 then
         S.songSel = idx
         if mx >= bx+bw-8 then songDragMode = 'stretch'
         else songDragMode, songDragOff = 'move', (S.songScroll + (mx-L.x)/barW) - b.startBar end
@@ -1101,41 +1120,66 @@ local function drawTimeline()
       end
     end
   end
-  if held and S.songSel and songDragMode then
+  if held and songLoopDrag then
+    local cur = barAt(mx)
+    if     songLoopDrag=='new' then S.loopB = cur; if S.loopB < S.loopA then S.loopA, S.loopB = S.loopB, S.loopA end
+    elseif songLoopDrag=='l'   then S.loopA = math.max(0, math.min(S.loopB-1, cur))
+    elseif songLoopDrag=='r'   then S.loopB = math.max(S.loopA+1, cur)
+    else   local len = S.loopB - S.loopA; S.loopA = math.max(0, cur - songDragOff); S.loopB = S.loopA + len end
+  elseif held and S.songSel and songDragMode then
     local b, mbar = S.song[S.songSel], S.songScroll + (mx - L.x)/barW
-    if songDragMode=='move' then
-      b.startBar = math.max(0, math.floor(mbar - songDragOff + 0.5))
-    else
-      b.bars = math.max(1, math.floor(mbar + 0.5) - b.startBar)
-    end
+    if songDragMode=='move' then b.startBar = math.max(0, math.floor(mbar - songDragOff + 0.5))
+    else b.bars = math.max(1, math.floor(mbar + 0.5) - b.startBar) end
   end
-  if released then songDragMode = nil end
+  if released then
+    if songLoopDrag then
+      if songLoopDrag=='new' and S.loopA==S.loopB then S.loopA, S.loopB = nil, nil   -- a click clears it
+      else S.loop = true end
+      songLoopDrag = nil
+    end
+    songDragMode = nil
+  end
 
   -- bar grid + numbers every 4 bars
   for i=0,L.view do
     local gx, bar = L.x + i*barW, S.songScroll + i
     col(bar % 4 == 0 and C.line or C.chip)
-    gfx.line(gx, L.y, gx, L.y+L.h)
-    if bar % 4 == 0 then txt(tostring(bar+1), gx+3, L.y+L.h-14, C.mute, 2) end
+    gfx.line(gx, L.y+LOOP_H, gx, L.y+L.h)
+    if bar % 4 == 0 then txt(tostring(bar+1), gx+3, L.y+L.h-13, C.mute, 2) end
   end
 
-  -- blocks
+  -- loop region: a strip on the ruler + edge lines down the lane, or a hint when unset
+  if S.loopA and S.loopB and S.loopB > S.loopA then
+    local lx0 = L.x + (S.loopA - S.songScroll)*barW
+    local lx1 = L.x + (S.loopB - S.songScroll)*barW
+    local vx0, vx1 = math.max(lx0, L.x), math.min(lx1, L.x+L.w)
+    if vx1 > vx0 then
+      box(vx0, L.y, vx1-vx0, LOOP_H, C.accentDim, true)
+      col(C.accent); gfx.line(vx0, L.y, vx0, L.y+L.h); gfx.line(vx1-1, L.y, vx1-1, L.y+L.h)
+      box(vx0, L.y, 5, LOOP_H, C.accent, true); box(vx1-5, L.y, 5, LOOP_H, C.accent, true)
+      txt('loop '..(S.loopA+1)..'-'..S.loopB, vx0+9, L.y+2, C.selink, 2)
+    end
+  else
+    txt('drag here to loop a range', L.x+6, L.y+2, {0.36,0.37,0.40}, 2)
+  end
+
+  -- blocks (below the loop strip)
   for idx,b in ipairs(S.song) do
     local bx = L.x + (b.startBar - S.songScroll) * barW
     local bw = b.bars * barW
     local vx0, vx1 = math.max(bx, L.x), math.min(bx+bw, L.x+L.w)
     if vx1 > vx0 then
       local sel = idx == S.songSel
-      box(vx0, L.y+6, vx1-vx0, L.h-26, KIND_COL[b.kind] or C.accent, true)
-      box(vx0, L.y+6, vx1-vx0, L.h-26, sel and C.ink or C.bg, false)
-      txt(b.label, vx0+6, L.y+12, C.bg, 2)
-      if sel then box(vx1-6, L.y+6, 6, L.h-26, C.ink, true) end   -- stretch handle
+      box(vx0, L.y+LOOP_H+2, vx1-vx0, L.h-LOOP_H-15, KIND_COL[b.kind] or C.accent, true)
+      box(vx0, L.y+LOOP_H+2, vx1-vx0, L.h-LOOP_H-15, sel and C.ink or C.bg, false)
+      txt(b.label, vx0+6, L.y+LOOP_H+6, C.bg, 2)
+      if sel then box(vx1-6, L.y+LOOP_H+2, 6, L.h-LOOP_H-15, C.ink, true) end   -- stretch handle
     end
   end
 
-  -- playhead
+  -- playhead (offset by the region's first bar when looping a region)
   if playing then
-    local phx = L.x + (playingBar()-1 - S.songScroll) * barW
+    local phx = L.x + (songPlayOff + playingBar()-1 - S.songScroll) * barW
     if phx >= L.x and phx <= L.x+L.w then
       col(C.accent); gfx.line(phx, L.y, phx, L.y+L.h); gfx.line(phx+1, L.y, phx+1, L.y+L.h)
     end
@@ -1226,7 +1270,7 @@ end
 local function loadFav(name)
   local str = reaper.GetExtState(FAV, 's_'..name)
   if str == '' then S.status = 'That favorite is gone.'; return end
-  S.song, S.songSel, S.curFav = songDeserialize(str), nil, name
+  S.song, S.songSel, S.curFav = songDeserialize(str), nil, name; S.loopA, S.loopB = nil, nil
   S.status = 'Loaded "'..name..'"  ·  '..#S.song..' block'..(#S.song==1 and '' or 's')..', '..songLen()..' bars.'
 end
 local function delFav()
@@ -1373,7 +1417,7 @@ local function draw(dh)
     tx = tx - w; local hit_ = button(tx, sy, w, 26, label, primary); tx = tx - 6; return hit_
   end
   if rbtn(72, S.loop and 'loop: on' or 'loop: off', S.loop) then S.loop = not S.loop end
-  if rbtn(80, 'Clear') then S.song, S.songSel, S.curFav = {}, nil, nil; stopAudition(); S.status='Song cleared.' end
+  if rbtn(80, 'Clear') then S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; stopAudition(); S.status='Song cleared.' end
   if rbtn(140, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
   if rbtn(104, playing and S.playSong and 'Stop' or 'Play song') then
     if playing and S.playSong then stopAudition() else audition(true) end
