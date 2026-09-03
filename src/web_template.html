@@ -56,7 +56,6 @@
   .btn:hover{border-color:var(--amber-dim)}
   .btn.primary{background:var(--amber);border-color:var(--amber);color:#FFFFFF;font-weight:600}
   .toggle[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
-  label.ctl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute)}
   input[type=range]{accent-color:var(--amber);width:130px}
   .pat{display:grid;grid-template-columns:104px 1fr;gap:10px;align-items:center;
        padding:7px 8px;border-radius:3px;cursor:pointer;border:1px solid transparent}
@@ -93,7 +92,6 @@
   #ar-count{color:var(--mute);font:11px var(--mono)}
   #ar-msg{color:var(--amber);font:11px var(--mono);margin-left:auto;min-height:1em;text-align:right}
   #ar-loop[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
-  #ar-fav{max-width:170px;padding:8px 10px}
   /* timeline: ruler + lane scroll together */
   #ar-scroll{display:none;overflow-x:auto;overflow-y:hidden;margin:0 8px 10px;
              border:1px solid var(--line);border-radius:6px;background:#1c1e22;touch-action:pan-x}
@@ -361,13 +359,7 @@
         <button class="btn toggle" id="ar-metro" aria-pressed="false" title="Metronome click while the song plays">Click</button>
         <button class="btn" id="ar-export">Export MIDI</button>
         <button class="btn" id="ar-undo" title="Undo the last arranger change (Z)">Undo</button>
-        <button class="btn" id="ar-clear" title="Remove ALL blocks — use the × on a block to remove just one">Clear song
-        <span id="ar-favhost" hidden>
-          <label class="ctl">Tempo <input type="range" id="ar-bpm" min="60" max="200" value="120"><span id="ar-bpmv">120</span></label>
-          <button id="ar-save">Save</button>
-          <select id="ar-fav"><option value="">&#9733; Favorites&hellip;</option></select>
-          <button id="ar-favdel">Del</button>
-        </span>
+        <button class="btn" id="ar-clear" title="Remove ALL blocks — use the × on a block to remove just one">Clear song</button>
         <span id="ar-msg" role="status" aria-live="polite"></span>
       </div>
       <div id="ar-scroll">
@@ -1489,7 +1481,6 @@ function arExport(){
   arMsg(`Exported ${fmtLen(arEndBeat())} of MIDI.`);
 }
 $('ar-export').onclick=arExport;
-$('ar-bpm').oninput=e=>{ AR.bpm=+e.target.value; $('ar-bpmv').textContent=e.target.value; arSave(); };
 
 /* persistence — guarded localStorage */
 function songData(){
@@ -1504,7 +1495,7 @@ function applySong(s){
   AR.loopA=(s.loopA!=null && s.loopB>s.loopA)?s.loopA:null; AR.loopB=AR.loopA==null?null:s.loopB;
   AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
     .filter(b=>{ try{ blockLoopStrokes(b); return b.lenBeats>=1 && blockLoopBeats(b)>0; }catch(e){ return false; } });
-  $('ar-bpm').value=AR.bpm; $('ar-bpmv').textContent=AR.bpm;
+  $('gtempo').value=AR.bpm; $('gtempov').textContent=AR.bpm;
   $('ar-loop').setAttribute('aria-pressed', AR.loop);
   $('ar-metro').setAttribute('aria-pressed', AR.metro);
 }
@@ -1516,11 +1507,8 @@ function arLoad(){
 let currentFav=null;
 function favsGet(){ try{ return JSON.parse(localStorage.getItem('gcp-songs')||'{}')||{}; }catch(e){ return {}; } }
 function favsSet(o){ try{ localStorage.setItem('gcp-songs', JSON.stringify(o)); }catch(e){} }
-function refreshFavs(){
-  const sel=$('ar-fav'), names=Object.keys(favsGet()).sort((a,b)=>a.localeCompare(b));
-  sel.innerHTML='<option value="">'+(names.length?'&#9733; Favorites…':'&#9733; No favorites yet')+'</option>'
-    + names.map(n=>`<option value="${n.replace(/"/g,'&quot;')}"${n===currentFav?' selected':''}>${n.replace(/</g,'&lt;')}</option>`).join('');
-}
+// favorites render in the sidebar now (renderFavSide); the redesign glue below augments this.
+function refreshFavs(){ }
 function saveFav(){
   arStopIfPlaying();
   if(!AR.blocks.length){ arMsg('Add some blocks before saving.'); return; }
@@ -1535,14 +1523,6 @@ function loadFav(name){
   arStopIfPlaying(); applySong(s); currentFav=name; arRender(); arSave();
   if(!AR.open) arToggle(true); refreshFavs(); arMsg(`Loaded “${name}”.`);
 }
-function delFav(){
-  const name=$('ar-fav').value; if(!name){ arMsg('Pick a favorite to delete.'); return; }
-  const all=favsGet(); delete all[name]; favsSet(all); if(currentFav===name) currentFav=null;
-  refreshFavs(); arMsg(`Deleted “${name}”.`);
-}
-$('ar-save').onclick=saveFav;
-$('ar-fav').onchange=e=>loadFav(e.target.value);
-$('ar-favdel').onclick=delFav;
 
 arLoad(); if(AR.blocks.length) arToggle(true); else arRender();
 refreshFavs();
@@ -1572,10 +1552,7 @@ window.addEventListener('load', arFit);
   function retrigger(){ if(!T||T.btn===$('ar-play')) return; var v=curView();
     if(v==='strum') playStrum(true); else if(v==='power') playPower(true); else if(v==='prog') playProg(true); }
   var gt=$('gtempo'); gt.value=AR.bpm; $('gtempov').textContent=AR.bpm;
-  gt.oninput=function(e){ AR.bpm=+e.target.value; $('gtempov').textContent=e.target.value;
-    $('ar-bpm').value=e.target.value; $('ar-bpmv').textContent=e.target.value; arSave(); retrigger(); };
-  var arb=$('ar-bpm'), arbOld=arb.oninput;
-  arb.oninput=function(e){ if(arbOld) arbOld.call(arb,e); gt.value=e.target.value; $('gtempov').textContent=e.target.value; };
+  gt.oninput=function(e){ AR.bpm=+e.target.value; $('gtempov').textContent=e.target.value; arSave(); retrigger(); };
 
   function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   var favPending=null, favToastT=null;
