@@ -127,6 +127,7 @@
             touch-action:none}   /* claim touch for drag instead of scrolling the timeline */
   .ar-block.pow{border-color:#8a6a2e;background:#382c18}
   .ar-block.prog{border-color:#4f8a5e;background:#1f3326}
+  .ar-block.riff{border-color:#8a6ea8;background:#2b2140}
   .ar-block.now{outline:2px solid var(--amber);outline-offset:-2px;z-index:4}
   .ar-block.drag{cursor:grabbing;opacity:.92;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.45)}
   .ar-seams{position:absolute;inset:0;pointer-events:none;
@@ -234,7 +235,7 @@
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.9.1+88a4f57</span></div>
+    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.10.0+28d8acb</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>
@@ -252,6 +253,7 @@
           <button class="tab" role="tab" aria-selected="false" data-view="prog">Progression</button>
           <button class="tab" role="tab" aria-selected="true" data-view="strum">Chord</button>
           <button class="tab" role="tab" aria-selected="false" data-view="power">Power</button>
+          <button class="tab" role="tab" aria-selected="false" data-view="riff">Riff</button>
         </div>
       </div>
 
@@ -315,6 +317,25 @@
           <p class="eyebrow">Mood</p><div class="chips" id="pg-moods"></div>
           <p class="eyebrow" style="margin-top:14px">Progression <span id="pg-count" style="color:var(--mute)"></span></p>
           <div id="pg-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--line);border-radius:8px"></div>
+        </div>
+      </div>
+
+      <!-- RIFF: procedural single-note metal-chug line -->
+      <div id="v-riff" hidden>
+        <div class="panel">
+          <div class="head"><span class="name" id="r-name">C</span><span class="dia" id="r-scale"></span></div>
+          <div class="meta" id="r-seed"></div>
+          <div id="r-board"></div>
+          <div class="row">
+            <button class="btn primary" id="r-play">Play</button>
+            <button class="btn" id="r-reroll" title="Generate a new line (advances the seed)">&#9860; Re-roll</button>
+            <button class="btn" id="r-add" title="Add this riff to the arranger">+ Song</button>
+          </div>
+          <p class="eyebrow" style="margin-top:16px">Scale</p><div class="chips" id="r-scales"></div>
+        </div>
+        <div class="panel">
+          <p class="eyebrow">Rhythm &mdash; the line pedals the root of your key (<b style="color:var(--ink)" id="r-keynote">C</b>) &middot; filled palm-muted, bright open</p>
+          <div id="r-pats"></div>
         </div>
       </div>
 
@@ -664,12 +685,54 @@ function strokeEvents(frets, kind){
   else { vels=[104,100,96,92,88,88].slice(-notes.length); art='mute'; }
   return order.map(([si,midi],i)=>({si, midi, offBeat:i*SPREAD[kind], vel:vels[i]||70, art}));
 }
+
+/* ---- procedural riff generator: ported 1:1 from src/reaper_template.lua (a JS<->Lua parity
+   test guards it). A seeded Park-Miller walk of a scale over a POWER rhythm: beat 1 lands on
+   the root, downbeats fall home ~50%, motion capped at the octave; same seed replays. ---- */
+const RIFF_SCALES = [
+  {key:'phrygian', name:'Phrygian',     iv:[0,1,3,5,7,8,10]},
+  {key:'phrygdom', name:'Phrygian dom', iv:[0,1,4,5,7,8,10]},
+  {key:'aeolian',  name:'Aeolian',      iv:[0,2,3,5,7,8,10]},
+];
+// rhythms are the POWER patterns, but indexed in the LUA POWER order — rhythmIdx is folded into
+// the seed, so the index must resolve to the same pattern on both sides. 1-based, matching Lua.
+const RIFF_ORDER = ['sustained','chug 8ths','chug 16ths','gallop','reverse gallop','stutter',
+  'triplets','syncopated','push','offbeat','open accents','ring and chug','ghosted chug'];
+function riffRhythm(idx){ return POWER_PATS[RIFF_ORDER[idx-1]]; }
+function riffLcg(seed){ let s = seed % 2147483647; if(s<=0) s += 2147483646;
+  return ()=>{ s = (s * 16807) % 2147483647; return s / 2147483647; }; }
+function riffScaleStep(iv, idx){ const n=iv.length; return iv[((idx%n)+n)%n] + 12*Math.floor(idx/n); }
+function generateRiff(iv, rhythm, rng){
+  const steps=[], moves=[-2,-1,1,1,2]; let cur=0;
+  for(let i=0;i<rhythm.p.length;i++){ const k=rhythm.p[i];
+    if(!k){ steps[i]=false; continue; }
+    const onBeat = (i % rhythm.div)===0;
+    if(i===0 || (onBeat && rng()<0.5)) cur=0;               // anchor the pulse on the root
+    else { cur += moves[Math.floor(rng()*moves.length)]; if(cur<0)cur=0; if(cur>iv.length)cur=iv.length; }
+    steps[i]={iv:riffScaleStep(iv,cur), art:k};
+  }
+  return steps;
+}
+function makeRiff(root, scaleKey, rhythmIdx, seed){
+  let scale=RIFF_SCALES[0]; RIFF_SCALES.forEach(s=>{ if(s.key===scaleKey) scale=s; });
+  let mixed = seed*1009 + rhythmIdx*31;
+  RIFF_SCALES.forEach((s,i)=>{ if(s===scale) mixed += (i+1)*7; });
+  return {rhythm:riffRhythm(rhythmIdx), scale, steps:generateRiff(scale.iv, riffRhythm(rhythmIdx), riffLcg(mixed))};
+}
+function fretFor(pitch){                                     // lowest string that frets this pitch, favouring low strings
+  for(let s=0;s<6;s++){ const f=pitch-OPEN[s]; if(f>=0 && f<=15){ const fr=[null,null,null,null,null,null]; fr[s]=f; return fr; } }
+  const fr=[null,null,null,null,null,null]; fr[5]=pitch-OPEN[5]; return fr;
+}
+function rootBaseOf(root){ const pc=NAMES.indexOf(root); return 40 + (((pc-4)%12)+12)%12; }
+
 // a block resolves to a fret shape by REFERENCE (CHORDS / powerChord), never a stored copy
 function blockFrets(b){
+  if(b.source==='riff')  return fretFor(rootBaseOf(b.root));
   return b.source==='power' ? powerChord(b.root, b.three) : CHORDS[b.root][b.quality].frets;
 }
 function blockLabel(b){
   if(b.source==='power') return b.root+'5';
+  if(b.source==='riff')  return b.root+' riff';
   if(b.source==='prog')  return b.name || b.chords.map(c=>CHORDS[c.root][c.quality].label).join(' ');
   return CHORDS[b.root][b.quality].label;
 }
@@ -682,6 +745,7 @@ const BEATS_PER_BAR = 4;                                  // 4/4 throughout
 function blockLoopBeats(b){
   if(b.source==='prog')  return b.chords.length*BEATS_PER_BAR;   // one chord per bar
   if(b.source==='power'){ const pp=POWER_PATS[b.patternId]; return pp.p.length/pp.div; }
+  if(b.source==='riff'){  const pp=riffRhythm(b.rhythmIdx); return pp.p.length/pp.div; }   // one bar
   return BEATS_PER_BAR;                                   // strum groove / single chord = 1 bar
 }
 // the strums of ONE loop iteration: {atBeat (0..loopBeats), kind, drive, frets}
@@ -695,6 +759,11 @@ function blockLoopStrokes(b){
   if(b.source==='power'){
     const pp=POWER_PATS[b.patternId], slot=1/pp.div, frets=powerChord(b.root, b.three);
     pp.p.forEach((k,i)=>{ if(k) out.push({atBeat:i*slot, kind:k, drive:!!b.drive, frets}); });
+    return out;
+  }
+  if(b.source==='riff'){                                   // single-note line: each slot its own fret shape
+    const riff=makeRiff(b.root, b.scale, b.rhythmIdx, b.seed), pp=riff.rhythm, slot=1/pp.div, rb=rootBaseOf(b.root);
+    pp.p.forEach((k,i)=>{ const st=riff.steps[i]; if(k && st) out.push({atBeat:i*slot, kind:k, drive:false, frets:fretFor(rb+st.iv)}); });
     return out;
   }
   if(b.source==='prog'){                                  // the strum pattern, one chord per bar
@@ -955,20 +1024,60 @@ Object.keys(STRUM_PATS).forEach(name=>{ const b=document.createElement('button')
   b.textContent=name; b.onclick=()=>{pgPat=name;drawProg();if(T)playProg(true);}; $('pg-pats').append(b); });
 $('pg-play').onclick=()=>playProg();
 
+/* ---------- RIFF source: procedural single-note line (engine lives in the ARRANGER CORE) ---------- */
+let rScale='phrygian', rRhythmIdx=4, rSeed=1;                // rhythmIdx 4 = gallop (Lua POWER order)
+function riffRoot(){ return NAMES[keyPC]; }                  // the line pedals the global key's root
+function drawRiff(){
+  const root=riffRoot(), sc=RIFF_SCALES.find(s=>s.key===rScale)||RIFF_SCALES[0];
+  $('r-name').textContent=root; $('r-scale').textContent=sc.name+' riff';
+  $('r-seed').textContent='seed '+rSeed+' — Re-roll for a new line';
+  $('r-keynote').textContent=root;
+  $('r-board').innerHTML=board(fretFor(rootBaseOf(root)),'rb');
+  [...$('r-scales').children].forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===rScale));
+}
+function buildRiffScales(){
+  $('r-scales').innerHTML='';
+  RIFF_SCALES.forEach(s=>{ const b=document.createElement('button'); b.className='chip'; b.dataset.v=s.key;
+    b.textContent=s.name; b.onclick=()=>{ rScale=s.key; drawRiff(); if(T) playRiff(true); }; $('r-scales').append(b); });
+}
+function buildRiffPats(){
+  $('r-pats').innerHTML='';
+  RIFF_ORDER.forEach((name,idx)=>{ const pp=riffRhythm(idx+1);
+    const row=document.createElement('div'); row.className='pat'; row.setAttribute('role','button');
+    row.setAttribute('aria-pressed', (idx+1)===rRhythmIdx); row.tabIndex=0;
+    row.innerHTML=`<span class="pat-name">${name}</span><div class="grid">`+
+      pp.p.map((k,i)=>`<span class="cell${i%pp.div===0?' beat':''}${k?' hit':''}${k==='D'?' open':''}${k==='x'?' ghost':''}"></span>`).join('')+`</div>`;
+    const go=()=>{ rRhythmIdx=idx+1; buildRiffPats(); playRiff(); };
+    row.onclick=go; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();go();}};
+    $('r-pats').append(row);
+  });
+}
+function playRiff(force){
+  if(T && !force){ stopAll(); return; }
+  const root=riffRoot(), riff=makeRiff(root, rScale, rRhythmIdx, rSeed), pp=riff.rhythm, rb=rootBaseOf(root), lit=lighter('rb');
+  const cells=[...$('r-pats').querySelectorAll('.pat[aria-pressed=true] .cell')];
+  start($('r-play'), cells, (i,when)=>{ const slot=i%pp.p.length, spb=60/tempo(), dur=spb/pp.div, k=pp.p[slot], st=riff.steps[slot];
+    if(k && st) stroke(fretFor(rb+st.iv), k, when, spb, false, lit);
+    return {slot, dur}; });
+}
+$('r-play').onclick=()=>playRiff();
+$('r-reroll').onclick=()=>{ rSeed++; drawRiff(); if(T) playRiff(true); };
+
 /* ---------- source switch + shortcuts ---------- */
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ stopAll();
   document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected', x===t));
-  ['strum','power','prog'].forEach(v=>$('v-'+v).hidden = v!==t.dataset.view);
+  ['strum','power','prog','riff'].forEach(v=>$('v-'+v).hidden = v!==t.dataset.view);
 });
 document.addEventListener('keydown',e=>{
   const typing=/INPUT|TEXTAREA/.test(e.target.tagName);
   const v=document.querySelector('.tab[aria-selected=true]').dataset.view;
   if(e.code==='Space' && !typing && !/BUTTON/.test(e.target.tagName)){ e.preventDefault();
-    v==='strum'?playStrum():v==='power'?playPower():playProg(); return; }
+    v==='strum'?playStrum():v==='power'?playPower():v==='riff'?playRiff():playProg(); return; }
   if(v==='strum' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey){ const i='asdfghj'.indexOf(e.key);
     if(i>=0){ e.preventDefault(); const dc=keyDegrees()[i]; sRoot=NAMES[dc.pc]; sQual=dc.quality; drawChord(); chordPreview(); } }
 });
 drawChord(); buildStrumPats(); drawPower(); buildPowerPats(); drawProg(); buildProgList();
+buildRiffScales(); buildRiffPats(); drawRiff();
 
 
 /* ==================== ARRANGER: SONG TRACK (DOM) ==================== */
@@ -1022,7 +1131,7 @@ function arRender(){
   // blocks
   [...arLane.querySelectorAll('.ar-block')].forEach(e=>e.remove());
   AR.blocks.forEach((b,idx)=>{
-    const cls = b.source==='power'?' pow' : b.source==='prog'?' prog' : '';
+    const cls = b.source==='power'?' pow' : b.source==='prog'?' prog' : b.source==='riff'?' riff' : '';
     const el=document.createElement('div');
     el.className='ar-block'+cls;
     el.style.left=(b.startBeat*px)+'px';
@@ -1049,9 +1158,11 @@ function capStrum(){ return {source:'strum', root:sRoot, quality:sQual, patternI
 function capPower(){ return {source:'power', root:pRoot, three:pThree, drive:pDrive, patternId:pPat}; }
 function capProg(){ const p=currentProg(); if(!p) return null;
   return {source:'prog', chords:progChords(p).map(c=>({root:c.root, quality:c.q})), name:p.name||null, patternId:pgPat}; }
+function capRiff(){ return {source:'riff', root:riffRoot(), scale:rScale, rhythmIdx:rRhythmIdx, seed:rSeed}; }
 $('s-add').onclick=()=>arAdd(capStrum());
 $('p-add').onclick=()=>arAdd(capPower());
 $('pg-add').onclick=()=>{ const c=capProg(); if(c) arAdd(c); else arMsg('No progression selected.'); };
+$('r-add').onclick=()=>arAdd(capRiff());
 
 /* per-block drag (reposition), edge-resize (add/remove beats), remove — all snap to the beat */
 function arWireBlock(el,b){
@@ -1202,6 +1313,7 @@ function arCurrentFrets(tb){
   for(const b of AR.blocks){
     if(tb>=b.startBeat && tb<b.startBeat+b.lenBeats){
       if(b.source==='power') return powerChord(b.root, b.three);
+      if(b.source==='riff')  return fretFor(rootBaseOf(b.root));
       if(b.source==='prog'){ const bar=Math.floor((tb-b.startBeat)/BEATS_PER_BAR)%b.chords.length, c=b.chords[bar];
         return CHORDS[c.root][c.quality].frets; }
       return CHORDS[b.root][b.quality].frets;
@@ -1209,11 +1321,11 @@ function arCurrentFrets(tb){
   }
   return null;
 }
-const AR_BOARD={strum:['s-board','sb'],power:['p-board','pb'],prog:['pg-board','pgb']};
+const AR_BOARD={strum:['s-board','sb'],power:['p-board','pb'],prog:['pg-board','pgb'],riff:['r-board','rb']};
 function arShowChord(frets){ const v=document.querySelector('.tab[aria-selected=true]').dataset.view, m=AR_BOARD[v];
   if(m) $(m[0]).innerHTML=board(frets, m[1]); }
 function arRestoreBoard(){ const v=document.querySelector('.tab[aria-selected=true]').dataset.view;
-  ({strum:drawChord, power:drawPower, prog:drawProg}[v]||(()=>{}))(); }
+  ({strum:drawChord, power:drawPower, prog:drawProg, riff:drawRiff}[v]||(()=>{}))(); }
 function arSweep(t0, A, period, spb, doLoop){
   const px=AR.pxPerBeat; let lastKey='';
   const step=()=>{
@@ -1313,7 +1425,7 @@ window.addEventListener('load', arFit);
 
   function gkLabel(){ $('gk-name').textContent=NAMES[keyPC]; }
   function gkRedraw(){ var d0=keyDegrees()[0]; sRoot=NAMES[d0.pc]; sQual=d0.quality;   // Chord follows the key's tonic on a key change
-    drawChord(); drawProg(); buildProgList(); drawPower(); gkLabel(); }
+    drawChord(); drawProg(); buildProgList(); drawPower(); drawRiff(); gkLabel(); }
   $('gk-prev').onclick=function(){ keyPC=(keyPC+11)%12; pgStartPC=keyPC; gkRedraw(); };
   $('gk-next').onclick=function(){ keyPC=(keyPC+1)%12;  pgStartPC=keyPC; gkRedraw(); };
   function gkMode(m){ keyMode=m; pgMode=m;
