@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Guitar Songwriter</title>
 <style>
   :root{
@@ -148,13 +148,13 @@
   html,body{height:100%}
   body{margin:0 !important;padding:0 !important;overflow:hidden}
   body.ar-open{padding:0 !important}                 /* cancel the old fixed-arranger padding */
-  #app{display:grid;height:100vh;grid-template-columns:266px minmax(0,1fr);
+  #app{display:grid;height:100vh;height:100dvh;grid-template-columns:266px minmax(0,1fr);   /* dvh keeps us above the iOS address bar */
        grid-template-rows:auto minmax(0,1fr) minmax(148px,188px);
        grid-template-areas:"side head" "side work" "side song";gap:1px;background:var(--line)}
   #side{grid-area:side;background:var(--panel);display:flex;flex-direction:column;min-height:0}
-  #head{grid-area:head;background:var(--panel);display:flex;align-items:center;gap:14px;padding:0 16px;min-height:54px;flex-wrap:wrap}
+  #head{grid-area:head;background:var(--panel);display:flex;align-items:center;gap:14px;padding:env(safe-area-inset-top) 16px 0;min-height:54px;flex-wrap:wrap}   /* clear the iOS status bar / notch */
   #work{grid-area:work;min-height:0;overflow-y:auto;background:var(--bg)}
-  #song{grid-area:song;min-height:0;background:var(--panel);border-top:1px solid var(--line);display:flex}
+  #song{grid-area:song;min-height:0;background:var(--panel);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}   /* clear the iOS home indicator */
 
   /* header */
   .brand{font:600 14px/1 system-ui;display:flex;align-items:center;gap:8px;white-space:nowrap}
@@ -236,7 +236,7 @@
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.12.6+2b5ceea</span></div>
+    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.12.7+c02f3e4</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>
