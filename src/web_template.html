@@ -1061,7 +1061,7 @@ function playRiff(force){
     return {slot, dur}; });
 }
 $('r-play').onclick=()=>playRiff();
-$('r-reroll').onclick=()=>{ rSeed++; drawRiff(); if(T) playRiff(true); };
+$('r-reroll').onclick=()=>{ rSeed++; drawRiff(); playRiff(true); };   // always play the new line so you hear the re-roll
 
 /* ---------- source switch + shortcuts ---------- */
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{ stopAll();
