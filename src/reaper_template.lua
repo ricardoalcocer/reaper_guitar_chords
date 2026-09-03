@@ -873,15 +873,24 @@ local function be(n, bytes)
   return s
 end
 
-local function exportMidi()
-  local PPQ, bpm = 480, tempo()
-  local evs = (S.tab==4)
-    and buildRiffEvents(currentRiff(), rootBaseOf(S.rroot), barQN())
-    or  buildEvents(currentFrets(), currentArt(), barQN())
+local function exportMidi(songMode)
+  local PPQ, bqn, bpm = 480, barQN(), tempo()
   local list = {}
-  for _,e in ipairs(evs) do
-    list[#list+1] = {t=math.floor(e.qn*PPQ+0.5), on=1, p=e.pitch, v=e.vel}
-    list[#list+1] = {t=math.floor((e.qn+e.len)*PPQ+0.5), on=0, p=e.pitch, v=0}
+  local function push(qn, len, p, v)
+    list[#list+1] = {t=math.floor(qn*PPQ+0.5), on=1, p=p, v=v}
+    list[#list+1] = {t=math.floor((qn+len)*PPQ+0.5), on=0, p=p, v=0}
+  end
+  if songMode then                                        -- the whole arrangement, bar by bar
+    if #S.song==0 then S.status = 'The song is empty — nothing to export.' return end
+    for bar,evlist in ipairs(renderSongBars(bqn)) do
+      local off = (bar-1)*bqn
+      for _,e in ipairs(evlist) do push(off+e.qn, e.len, e.pitch, e.vel) end
+    end
+  else                                                    -- the current tab's one bar
+    local evs = (S.tab==4)
+      and buildRiffEvents(currentRiff(), rootBaseOf(S.rroot), bqn)
+      or  buildEvents(currentFrets(), currentArt(), bqn)
+    for _,e in ipairs(evs) do push(e.qn, e.len, e.pitch, e.vel) end
   end
   table.sort(list, function(a,b) if a.t==b.t then return a.on < b.on end return a.t < b.t end)
 
@@ -899,7 +908,9 @@ local function exportMidi()
 
   local dir = reaper.GetProjectPath('') .. '/GuitarChords'
   reaper.RecursiveCreateDirectory(dir, 0)
-  local name = (currentLabel() .. '_' .. currentArt().name):gsub('[^%w%+%-]', '_')
+  local name = songMode
+    and ('Song_' .. #S.song .. 'x' .. songLen() .. 'bars')
+    or  (currentLabel() .. '_' .. currentArt().name):gsub('[^%w%+%-]', '_')
   local path = dir .. '/' .. name .. '.mid'
   local f = io.open(path, 'wb')
   if not f then S.status = 'Could not write to ' .. dir return end
@@ -1457,6 +1468,7 @@ local function draw(dh)
   if rbtn(58, 'Undo') then songUndoPop() end
   if rbtn(96, 'Clear song') then songSnapshot(); S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; stopAudition(); S.status='Song cleared  ·  Undo to restore.' end
   if rbtn(132, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
+  if rbtn(86, 'Export .mid') then exportMidi(true) end
   if rbtn(96, playing and S.playSong and 'Stop' or 'Play song') then
     if playing and S.playSong then stopAudition() else audition(true) end
   end
