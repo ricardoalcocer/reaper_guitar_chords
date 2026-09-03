@@ -17,6 +17,7 @@ test: all
 	@lua5.4 tests/test_progressions.lua
 	@lua5.4 tests/test_riffs.lua
 	@lua5.4 tests/test_song.lua
+	@lua5.4 tests/test_song_fav.lua
 	@lua5.4 tests/test_inversions.lua
 	@lua5.4 tests/dump_analysis.lua >/dev/null && node tests/test_parity.js
 	@node tests/test_arranger.js

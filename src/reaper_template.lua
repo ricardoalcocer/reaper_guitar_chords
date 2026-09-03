@@ -19,6 +19,9 @@ local NAMES  = {'C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'}
 local ROOTS  = {'C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'}
 local QUALS  = {'maj','m','7','m7','maj7','m7b5','dim7','dim','aug',
                 'sus2','sus4','7sus4','6','m6','9','add9'}
+-- the extended voicings chorddata carries beyond the common set — so any chord a progression
+-- can use (e.g. m9, maj9, 13sus4) is voiceable here too. Power's '5' stays on the Power tab.
+local QUALS_EXT = {'maj9','m9','m11','13','13sus4','9sus4','6/9','m6/9','add11','mMaj7','7alt'}
 
 -- strum patterns: 8 eighth-note slots
 local STRUM = {
@@ -397,9 +400,10 @@ local S = {
   status   = 'Select your guitar track, press Tab to set it up, then Audition (space) — or play a s d f g h j to sing along.',
 }
 
--- the Song/arranger feature is parked: its engine, tests and UI all stay in place,
--- but the tab and its "Add to Song" button are hidden until this is flipped back on.
-local SONG_ENABLED = false
+-- the Song/arranger is the EZbass-style scratch lane: audition on a tab, "+ Add to Song",
+-- arrange the blocks, then "Send to REAPER" commits the whole thing as MIDI items at the
+-- cursor. Tempo/metronome/looping are left to REAPER itself — the tool just emits clean MIDI.
+local SONG_ENABLED = true
 
 -- progressions filtered to the chosen mood, in library order
 local function progList()
@@ -564,6 +568,62 @@ local function deleteSel()
     table.remove(S.song, S.songSel); S.songSel = nil
     if b then S.status = 'Removed "'..b.label..'".' end
   end
+end
+-- serialize the arrangement to a flat string (one block per line) for save/load. Kept pure so
+-- it's testable; prog blocks inline their chords so they reconstruct without a library lookup.
+local function songSerialize()
+  local lines = {}
+  for _,b in ipairs(S.song) do
+    local g = b.g
+    if b.kind=='chord' then
+      lines[#lines+1] = table.concat({'chord',b.startBar,b.bars,g.root,g.qual,g.strumIdx}, '|')
+    elseif b.kind=='power' then
+      lines[#lines+1] = table.concat({'power',b.startBar,b.bars,g.proot,g.three and 1 or 0,g.powerIdx}, '|')
+    elseif b.kind=='riff' then
+      lines[#lines+1] = table.concat({'riff',b.startBar,b.bars,g.rroot,g.scale,g.rhythmIdx,g.riffSeed}, '|')
+    else
+      local cs = {}
+      for _,c in ipairs(g.prog.chords) do cs[#cs+1] = c[1]..':'..c[2] end
+      lines[#lines+1] = table.concat({'prog',b.startBar,b.bars,g.keyPC,g.keyMode,g.strumIdx,
+                                      (g.prog.name or ''), table.concat(cs, ',')}, '|')
+    end
+  end
+  return table.concat(lines, '\n')
+end
+local function songDeserialize(str)
+  local song = {}
+  for line in (str..'\n'):gmatch('(.-)\n') do
+    if line ~= '' then
+      local f = {}
+      for tok in (line..'|'):gmatch('(.-)|') do f[#f+1] = tok end
+      local kind, startBar, bars = f[1], tonumber(f[2]) or 0, math.max(1, tonumber(f[3]) or 1)
+      local b
+      if kind=='chord' and CHORDS[f[4]] and CHORDS[f[4]][f[5]] then
+        b = {kind='chord', startBar=startBar, bars=bars, label=CHORDS[f[4]][f[5]].label,
+             g={root=f[4], qual=f[5], strumIdx=tonumber(f[6]) or 1}}
+      elseif kind=='power' and CHORDS[f[4]] then
+        b = {kind='power', startBar=startBar, bars=bars, label=f[4]..'5',
+             g={proot=f[4], three=f[5]=='1', powerIdx=tonumber(f[6]) or 1}}
+      elseif kind=='riff' and CHORDS[f[4]] then
+        b = {kind='riff', startBar=startBar, bars=bars, label=f[4]..' '..scaleName(f[5])..' riff',
+             g={rroot=f[4], scale=f[5], rhythmIdx=tonumber(f[6]) or 1, riffSeed=tonumber(f[7]) or 1}}
+      elseif kind=='prog' then
+        local chords = {}
+        for pair in ((f[8] or '')..','):gmatch('(.-),') do
+          local d,q = pair:match('(%-?%d+):(.+)')
+          if d and q and CHORDS['C'][q] then chords[#chords+1] = {tonumber(d), q} end
+        end
+        if #chords>0 then
+          local name = f[7] or ''
+          b = {kind='prog', startBar=startBar, bars=bars, label=(name~='' and name or 'progression'),
+               g={prog={name=name, chords=chords}, keyPC=tonumber(f[4]) or 0,
+                  keyMode=(f[5]=='min' and 'min' or 'maj'), strumIdx=tonumber(f[6]) or 1}}
+        end
+      end
+      if b then song[#song+1] = b end
+    end
+  end
+  return song
 end
 local function currentDia()
   local f = currentFrets()
@@ -1136,6 +1196,45 @@ end
 ----------------------------------------------------------------------
 local EXT = 'GuitarChordPack'
 local function inList(v, t) for _,x in ipairs(t) do if x==v then return true end end return false end
+
+-- song favorites: named arrangements kept in their own ExtState section, with a newline index
+-- so they can be listed (global ExtState has no key enumeration). The project is still your real
+-- save — this is for reusable block-sets you want to drop into any project.
+local FAV = EXT .. '_songs'
+local function favNames()
+  local out = {}
+  for nm in (reaper.GetExtState(FAV, '__index')..'\n'):gmatch('(.-)\n') do
+    if nm ~= '' then out[#out+1] = nm end
+  end
+  return out
+end
+local function favSetIndex(list) reaper.SetExtState(FAV, '__index', table.concat(list, '\n'), true) end
+local function saveFav()
+  if #S.song == 0 then S.status = 'Nothing to save — the song is empty.'; return end
+  local ok, name = reaper.GetUserInputs('Save song', 1, 'Name:', S.curFav or '')
+  if not ok then return end
+  name = (name or ''):gsub('^%s+',''):gsub('%s+$','')
+  if name == '' then return end
+  reaper.SetExtState(FAV, 's_'..name, songSerialize(), true)
+  local names = favNames()
+  if not inList(name, names) then names[#names+1] = name; table.sort(names); favSetIndex(names) end
+  S.curFav = name
+  S.status = 'Saved song "'..name..'".'
+end
+local function loadFav(name)
+  local str = reaper.GetExtState(FAV, 's_'..name)
+  if str == '' then S.status = 'That favorite is gone.'; return end
+  S.song, S.songSel, S.curFav = songDeserialize(str), nil, name
+  S.status = 'Loaded "'..name..'"  ·  '..#S.song..' block'..(#S.song==1 and '' or 's')..', '..songLen()..' bars.'
+end
+local function delFav()
+  if not S.curFav then S.status = 'No favorite selected to delete.'; return end
+  reaper.DeleteExtState(FAV, 's_'..S.curFav, true)
+  local out = {}
+  for _,n in ipairs(favNames()) do if n ~= S.curFav then out[#out+1] = n end end
+  favSetIndex(out); S.status = 'Deleted "'..S.curFav..'".'; S.curFav = nil
+end
+
 local function saveState()
   local set = function(k,v) reaper.SetExtState(EXT, k, tostring(v), true) end
   set('tab', S.tab)         set('root', S.root)       set('qual', S.qual)  set('inv', S.inv)
@@ -1340,7 +1439,11 @@ local function draw(dh)
     if chip(640, kY+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
 
     txt('QUALITY', 20, qY, C.mute, 2)
-    for i,q in ipairs(QUALS) do
+    -- common / extended pages keep the picker two rows tall on the fixed canvas while still
+    -- exposing every voiceable quality; the toggle highlights when the extended set is showing.
+    if chip(100, qY-3, 92, 22, '+ extended', S.qualExt, 2) then S.qualExt = not S.qualExt end
+    local qset = S.qualExt and QUALS_EXT or QUALS
+    for i,q in ipairs(qset) do
       local x = 20 + ((i-1)%8)*84
       local yy = qY + 18 + math.floor((i-1)/8)*30
       if chip(x, yy, 80, 26, q, q==S.qual, 2) then S.qual=q; S.inv=0; audition() end
@@ -1459,6 +1562,21 @@ local function draw(dh)
       end
       txt('Drag a block to move it · drag its right edge to stretch · scroll to pan',
           20, y+92, C.mute, 2)
+    end
+    -- favorites: save the whole arrangement, or click a name to load it. The project is still
+    -- your real save; this is for reusable block-sets you can drop into any project.
+    txt('FAVORITES', 20, y+118, C.mute, 2)
+    if button(120, y+114, 62, 22, 'Save…') then saveFav() end
+    if S.curFav and button(186, y+114, 62, 22, 'Delete') then delFav() end
+    local fnames = favNames()
+    if #fnames == 0 then
+      txt('none yet — Save keeps this arrangement to reuse anywhere', 258, y+120, C.mute, 2)
+    else
+      for i,nm in ipairs(fnames) do
+        local fx = 20 + ((i-1)%6)*112
+        local fy = y+146 + math.floor((i-1)/6)*28
+        if chip(fx, fy, 108, 24, nm, nm==S.curFav, 2) then loadFav(nm) end
+      end
     end
   else
     -- progressions tab — leads with STYLE and colour-codes by mood, so it reads by
