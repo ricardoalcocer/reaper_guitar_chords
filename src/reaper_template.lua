@@ -508,7 +508,7 @@ end
 
 -- one event-list per bar for whatever the active tab plays
 local function eventBars(bqn)
-  if S.tab==5 then return renderSongBars(bqn) end
+  if S.playSong then return renderSongBars(bqn) end
   if S.tab==4 then return { buildRiffEvents(currentRiff(), rootBaseOf(S.rroot), bqn) } end
   local art, out = currentArt(), {}
   for _,frets in ipairs(sequenceFrets()) do out[#out+1] = buildEvents(frets, art, bqn) end
@@ -715,13 +715,14 @@ local function checkAudible()
   return nil
 end
 
-local function audition()
-  if S.tab==5 and #S.song==0 then
+local function audition(songMode)
+  S.playSong = songMode and true or false
+  if S.playSong and #S.song==0 then
     S.status = 'The song is empty — add blocks from the other tabs first.' return
   end
   local why = checkAudible()
   if why then S.status = why
-  elseif S.tab==5 then S.status = 'Playing song · '..#S.song..' blocks, '..songLen()..' bars'
+  elseif S.playSong then S.status = 'Playing song · '..#S.song..' blocks, '..songLen()..' bars'
   else S.status = 'Playing ' .. currentLabel() .. ' - ' .. currentArt().name end
   panic()
   playing = true
@@ -773,7 +774,7 @@ local function serviceAudio()
     end
   end
   if playing then
-    local isPattern = currentArt().p ~= nil or S.tab==5
+    local isPattern = currentArt().p ~= nil
     if isPattern and S.loop and now > nextStart - 0.12 then
       queueBar(nextStart)
     elseif #sched == 0 and (not isPattern or not S.loop) then
@@ -788,7 +789,7 @@ end
 local function insertAtCursor()
   local tr = reaper.GetSelectedTrack(0, 0)
   if not tr then S.status = 'No track selected. Click a track first.' return end
-  if S.tab==5 and #S.song==0 then S.status = 'The song is empty — nothing to send.' return end
+  if S.playSong and #S.song==0 then S.status = 'The song is empty — nothing to send.' return end
   local pos  = reaper.GetCursorPosition()
   local bqn  = barQN()
   local bars = eventBars(bqn)
@@ -808,7 +809,7 @@ local function insertAtCursor()
   end
   reaper.MIDI_Sort(take)
   local nm
-  if S.tab==5 then
+  if S.playSong then
     nm = 'Song · ' .. #S.song .. ' blocks, ' .. songLen() .. ' bars'
   elseif S.tab==3 then
     local p = currentProg()
@@ -928,17 +929,17 @@ end
 -- Shared by the Chords, Power and Riff tabs, so the strip and its keys mean the same
 -- thing everywhere — both route through playDegree(), which knows what "root" each tab
 -- sets. The lit numeral tracks whichever root the current tab is using.
-local function drawInKeyStrip(y)
-  txt('IN KEY', 20, y, C.mute, 2)
-  txt('press the home row  a s d f g h j  to play and sing along', 78, y, {0.36,0.37,0.40}, 2)
-  if chip(640, y+18, 60, 26, S.sevenths and '7ths' or 'triads', S.sevenths, 2) then
+local function drawInKeyStrip(x0, y)
+  txt('IN KEY', x0, y, C.mute, 2)
+  txt('press  a s d f g h j  to play and sing along', x0+58, y, {0.36,0.37,0.40}, 2)
+  if chip(x0+620, y+18, 60, 26, S.sevenths and '7ths' or 'triads', S.sevenths, 2) then
     S.sevenths = not S.sevenths
   end
   local rootPC = (S.tab==2 and pcOf(S.proot))
               or (S.tab==4 and pcOf(S.rroot))
               or pcOf(S.root)
   for i,dc in ipairs(diatonicChords(S.keyPC, S.keyMode, S.sevenths)) do
-    local x = 20 + (i-1)*88
+    local x = x0 + (i-1)*88
     -- on Chords the quality must match too; Power and Riff take only the root
     local sel = (rootPC==dc.pc) and (S.tab~=1 or S.qual==dc.quality)
     if chip(x, y+18, 84, 26, dc.numeral, sel, 2) then playDegree(i) end
@@ -1140,7 +1141,7 @@ local function drawTimeline()
   end
 end
 
-local W, H = 720, 812             -- design canvas: fixed width, fixed *minimum* height
+local W, H = 900, 812             -- design canvas: fixed width, fixed *minimum* height
 -- The canvas grows taller than H to fill a tall (docked) window instead of letterboxing:
 -- the extra height goes into the fretboard/timeline, everything below it shifts down, and
 -- the footer anchors to the true bottom. Width still governs the scale, so nothing reflows
@@ -1250,7 +1251,7 @@ end
 local function loadState()
   local g = function(k) local v = reaper.GetExtState(EXT, k); return v ~= '' and v or nil end
   local n = function(k) local v = g(k); return v and tonumber(v) or nil end
-  local maxTab = SONG_ENABLED and 5 or 4
+  local maxTab = 4   -- Song is a docked lane now, not a tab (1 chord, 2 power, 3 prog, 4 riff)
   if n('tab') then S.tab = math.max(1, math.min(maxTab, math.floor(n('tab')))) end
   if g('root')  and CHORDS[g('root')] then S.root = g('root') end
   if g('qual')  and CHORDS[S.root][g('qual')] then S.qual = g('qual') end
@@ -1288,324 +1289,238 @@ do
 end
 afterInit()
 
+local PADX, SIDE_W = 184, 170      -- work area left edge, favorites sidebar width
+local SOURCES = {'Progression','Chord','Power','Riff'}   -- S.tab 1..4 map: 1 Chord,2 Power,3 Prog,4 Riff
+-- source switch order (left→right) with the S.tab each maps to
+local SRCSW = {{'Progression',3},{'Chord',1},{'Power',2},{'Riff',4}}
+
+local function drawSidebar(dh)
+  box(0, 0, SIDE_W, dh-52, C.panel, true)
+  col(C.line); gfx.line(SIDE_W, 0, SIDE_W, dh-52)
+  txt('FAVORITES', 16, 16, C.mute, 2)
+  if button(16, 38, SIDE_W-32, 26, '+ Save song') then saveFav() end
+  local names = favNames()
+  if #names == 0 then
+    txt('No saved songs yet.', 16, 78, C.mute, 2)
+    txt('Build a song, then', 16, 96, C.mute, 2)
+    txt('press + Save song.', 16, 112, C.mute, 2)
+  else
+    for i,nm in ipairs(names) do
+      local ry = 76 + (i-1)*30
+      if ry > dh - 96 then break end
+      if chip(16, ry, SIDE_W-32, 26, nm, nm==S.curFav, 2) then loadFav(nm) end
+    end
+    if S.curFav and button(16, dh-84, SIDE_W-32, 24, 'Delete selected') then delFav() end
+  end
+  txt('The project is your', 16, dh-46, {0.36,0.37,0.40}, 2)
+  txt('real save.', 16, dh-32, {0.36,0.37,0.40}, 2)
+end
+
+local function drawHeader()
+  txt('Guitar Songwriter', PADX, 14, C.ink, 3)
+  txt('KEY', PADX+236, 20, C.mute, 2)
+  if button(PADX+270, 12, 26, 28, '<') then S.keyPC = (S.keyPC + 11) % 12 end
+  txtc(NAMES[S.keyPC+1], PADX+298, 18, 44, C.ink, 3)
+  if button(PADX+344, 12, 26, 28, '>') then S.keyPC = (S.keyPC + 1) % 12 end
+  if chip(PADX+378, 12, 58, 28, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
+  if chip(PADX+438, 12, 58, 28, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
+  txt(string.format('TEMPO  %.0f BPM', tempo()), PADX+512, 20, C.mute, 2)
+end
+
 local function draw(dh)
   dh = dh or H
-  local grow = dh - H          -- extra height to absorb (0 unless the window is tall)
-  local bgrow = math.min(grow, BOARD_MAX_EXTRA)   -- capped share the board/timeline take
+  local grow  = dh - H
+  local bgrow = math.min(grow, BOARD_MAX_EXTRA)
   gfx.setfont(1)
   col(C.bg); gfx.rect(0,0,W,dh,1)
 
-  -- tabs
-  local tabs = {'Chords','Power','Progressions','Riffs'}
-  if SONG_ENABLED then tabs[#tabs+1] = 'Song' end
-  for i,t in ipairs(tabs) do
-    local x = 20 + (i-1)*112
-    if chip(x, 16, 104, 28, t, S.tab==i, 2) then S.tab=i; stopAudition() end
-  end
-  -- UI zoom stepper (EZdrummer-style size levels). Clicking re-opens the window at
-  -- the new size after the frame; the UI is always drawn on the 720x812 canvas and
-  -- blitted to fill, so nothing reflows or clips.
+  drawSidebar(dh)
+  drawHeader()
+
+  -- UI zoom stepper (top-right)
   do
-    local px  = W - 20 - 26            -- '+' button, right edge (bigger)
-    local lx  = px - 48                -- percent label
-    local mnx = lx - 26                -- '-' button (smaller)
-    if button(mnx, 16, 26, 24, '-') and uiIdx < #PCTS then
-      uiIdx = uiIdx + 1
-      local w0, h0 = levelSize(uiIdx); pendingSize = {w=w0, h=h0}
+    local px  = W - 16 - 26
+    local lx  = px - 46
+    local mnx = lx - 26
+    if button(mnx, 12, 26, 24, '-') and uiIdx < #PCTS then
+      uiIdx = uiIdx + 1; local w0,h0 = levelSize(uiIdx); pendingSize = {w=w0, h=h0}
     end
-    txtc(PCTS[uiIdx]..'%', lx, 22, 48, C.mute, 2)
-    if button(px, 16, 26, 24, '+') and uiIdx > 1 then
-      uiIdx = uiIdx - 1
-      local w0, h0 = levelSize(uiIdx); pendingSize = {w=w0, h=h0}
+    txtc(PCTS[uiIdx]..'%', lx, 18, 46, C.mute, 2)
+    if button(px, 12, 26, 24, '+') and uiIdx > 1 then
+      uiIdx = uiIdx - 1; local w0,h0 = levelSize(uiIdx); pendingSize = {w=w0, h=h0}
     end
   end
 
+  -- source switch
+  for i,sw in ipairs(SRCSW) do
+    local x = PADX + (i-1)*128
+    if chip(x, 52, 120, 30, sw[1], S.tab==sw[2], 2) then S.tab = sw[2]; stopAudition() end
+  end
+
+  -- ---- the docked Song lane (bottom strip), laid out first so the work area knows its top ----
+  local laneTop = dh - 168
+  LANE.x, LANE.y, LANE.w, LANE.h = PADX, laneTop + 34, W - PADX - 16, dh - 60 - (laneTop + 34)
+  -- song header + transport
+  local sy = laneTop
+  txt('SONG', PADX, sy+4, C.mute, 2)
+  if #S.song == 0 then
+    txt('audition below, press + Add, then drag the blocks here', PADX+56, sy+4, C.mute, 2)
+  else
+    txt(#S.song..' block'..(#S.song==1 and '' or 's')..'  ·  '..songLen()..' bars', PADX+56, sy+4, C.mute, 2)
+  end
+  local tx = W - 16
+  local function rbtn(w, label, primary)
+    tx = tx - w; local hit_ = button(tx, sy, w, 26, label, primary); tx = tx - 6; return hit_
+  end
+  txt(string.format('%.0f BPM', tempo()), tx-70, sy+7, C.mute, 2)   -- rough right anchor below
+  if rbtn(52, 'loop') then S.loop = not S.loop end   -- (loop chip look via button; state shown by status)
+  if rbtn(94, 'Clear') then S.song, S.songSel, S.curFav = {}, nil, nil; stopAudition(); S.status='Song cleared.' end
+  if rbtn(140, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
+  if rbtn(96, playing and S.playSong and 'Stop' or 'Play song') then
+    if playing and S.playSong then stopAudition() else audition(true) end
+  end
+  drawTimeline()
+
+  -- ---- the work area for the active source: PADX-based, between the switch and the lane ----
+  local WX = PADX
   local f = currentFrets()
-  if S.tab==3 then
-    -- header: progression name, its chords in the chosen key, roman numerals.
-    -- the board and the lit chord follow whichever bar is currently sounding.
+  local bx, byT = WX+448, 96                      -- board on the right, info on the left
+  local infoY = 96
+
+  if S.tab==3 then                                 -- Progression
     local p = currentProg()
     local cs = progChords(p)
     local bar = math.min(playingBar(), #cs)
     f = cs[bar].frets
-    txt(p.name ~= '' and p.name or (p.mood .. ' progression'), 20, 58, C.ink, 1)
-    gfx.setfont(4)
-    local lx = 20
-    for j,c in ipairs(cs) do
-      col(j==bar and C.accent or C.mute)
-      gfx.x = lx; gfx.y = 84; gfx.drawstr(c.label)
-      lx = lx + gfx.measurestr(c.label) + gfx.measurestr('  ')
-    end
+    txt(p.name ~= '' and p.name or (p.mood..' progression'), WX, infoY, C.ink, 3)
+    gfx.setfont(4); local lx = WX
+    for j,c in ipairs(cs) do col(j==bar and C.accent or C.mute); gfx.x=lx; gfx.y=infoY+30; gfx.drawstr(c.label)
+      lx = lx + gfx.measurestr(c.label) + gfx.measurestr('  ') end
     local romans = {}
-    for _,c in ipairs(cs) do
-      romans[#romans+1] = analyze(S.keyPC, S.keyMode, pcOf(c.root), c.qual).numeral
-    end
-    txt(table.concat(romans, '   '), 20, 108, C.mute, 2)
-    txt('in ' .. NAMES[S.keyPC+1] .. ' ' .. (S.keyMode=='maj' and 'major' or 'minor')
-        .. '   ·   ' .. #cs .. ' bars', 470, 58, C.mute, 2)
-  elseif S.tab==4 then
-    -- riff header: procedural line, pedal root shown on the board
-    txt(currentLabel() .. ' riff', 20, 60, C.ink, 3)
-    txt(currentDia(), 250, 72, C.accent, 4)
-    txt('procedural line · pedal root + scale', 20, 100, C.mute, 2)
-    txt('seed ' .. S.riffSeed .. '   ·   ' .. currentArt().name, 470, 60, C.mute, 2)
-    txt('Re-roll for a new line; the same seed replays identically', 470, 78, C.mute, 2)
-  elseif S.tab==5 then
-    -- song header: arrangement summary
-    txt('Song', 20, 60, C.ink, 3)
-    if #S.song==0 then
-      txt('empty — add blocks from the other tabs, then drag to arrange', 20, 100, C.mute, 2)
-    else
-      txt(#S.song..' block'..(#S.song==1 and '' or 's')..'   ·   '..songLen()..' bars',
-          20, 100, C.mute, 2)
-    end
-    txt('drag to reposition · drag right edge to stretch', 470, 60, C.mute, 2)
-    txt('Send to REAPER lays the whole arrangement at the cursor', 470, 78, C.mute, 2)
-  else
-    -- header
+    for _,c in ipairs(cs) do romans[#romans+1] = analyze(S.keyPC,S.keyMode,pcOf(c.root),c.qual).numeral end
+    txt(table.concat(romans,'   '), WX, infoY+60, C.mute, 2)
+    txt('in '..NAMES[S.keyPC+1]..' '..(S.keyMode=='maj' and 'major' or 'minor')..'  ·  '..#cs..' bars', WX, infoY+80, C.mute, 2)
+  elseif S.tab==4 then                             -- Riff
+    txt(currentLabel()..' riff', WX, infoY, C.ink, 3)
+    txt(currentDia(), WX, infoY+34, C.accent, 4)
+    txt('procedural line · pedal root + scale · Re-roll for a new line', WX, infoY+66, C.mute, 2)
+  else                                             -- Chord / Power
     local label = currentLabel()
-    if S.tab==1 and S.inv>0 then                    -- show the slash chord for inversions
+    if S.tab==1 and S.inv>0 then
       local lo=999 for _,nt in ipairs(pitchesOf(f)) do if nt.pitch<lo then lo=nt.pitch end end
-      label = label .. '/' .. NAMES[lo%12+1]
+      label = label..'/'..NAMES[lo%12+1]
     end
-    txt(label, 20, 60, C.ink, 3)
-    txt(currentDia(), 250, 72, C.accent, 4)
-    local INVN = {'1st inversion', '2nd inversion', '3rd inversion'}
+    txt(label, WX, infoY, C.ink, 3)
+    txt(currentDia(), WX, infoY+34, C.accent, 4)
+    local INVN = {'1st inversion','2nd inversion','3rd inversion'}
     local meta = noteNames(f)
-    if S.tab==1 then meta = meta .. '   ' .. (S.inv>0 and INVN[S.inv] or CHORDS[S.root][S.qual].shape)
-    else meta = meta .. '   ' .. (S.three and 'root + 5th + octave' or 'root + 5th') end
-    txt(meta, 20, 100, C.mute, 2)
-
-    -- roman numeral and function, relative to the chosen key
+    if S.tab==1 then meta = meta..'   '..(S.inv>0 and INVN[S.inv] or CHORDS[S.root][S.qual].shape)
+    else meta = meta..'   '..(S.three and 'root + 5th + octave' or 'root + 5th') end
+    txt(meta, WX, infoY+64, C.mute, 2)
     local chordPC = pcOf(S.tab==1 and S.root or S.proot)
     local a = analyze(S.keyPC, S.keyMode, chordPC, S.tab==1 and S.qual or '5')
-    local kx = 470
-    txt('in ' .. NAMES[S.keyPC+1] .. ' ' .. (S.keyMode=='maj' and 'major' or 'minor'),
-        kx, 60, C.mute, 2)
-    txt(a.numeral, kx, 74, C.accent, 3)
-    txt(a.func, kx, 100, C.ink, 2)
-    txt(a.note, kx, 116, C.mute, 2)
+    txt(a.numeral..'  ·  '..a.func, WX, infoY+84, C.mute, 2)
   end
+  drawBoard(f, bx, 116, W-16-bx, 92 + bgrow)
 
-  -- the board (or the song timeline) takes a capped slice of the extra height; the rest
-  -- stays open above the footer, so the fretboard keeps a rectangular shape
-  if S.tab==5 then drawTimeline() else drawBoard(f, 20, 138, 680, 100 + bgrow) end
-
-  -- transport (tab-aware: the Song tab commits the whole arrangement)
-  local y = 268 + bgrow
-  if button(20, y, 96, 30, playing and 'Stop' or 'Audition', not playing) then
-    if playing then stopAudition() else audition() end
+  -- transport row (source-level audition / insert / setup / add-to-song)
+  local ty = 214 + bgrow
+  if button(WX, ty, 96, 30, playing and not S.playSong and 'Stop' or 'Audition', not (playing and not S.playSong)) then
+    if playing and not S.playSong then stopAudition() else audition(false) end
   end
-  if S.tab==5 then
-    if button(122, y, 140, 30, 'Send to REAPER', true) then insertAtCursor() end
-    if button(268, y, 104, 30, 'Set up track') then setupTrack() end
-    if button(378, y, 96, 30, 'Clear song') then
-      S.song, S.songSel = {}, nil; stopAudition(); S.status = 'Song cleared.'
-    end
-    if chip(480, y, 54, 30, 'loop', S.loop, 2) then S.loop = not S.loop end
-    txt(string.format('%.0f BPM', tempo()), 544, y+9, C.mute, 2)
-  else
-    if button(122, y, 116, 30, 'Insert at cursor') then insertAtCursor() end
-    if button(244, y, 84, 30, 'Save .mid') then exportMidi() end
-    if button(334, y, 104, 30, 'Set up track') then setupTrack() end
-    if SONG_ENABLED and button(444, y, 124, 30, '+ Add to Song', true) then addToSong(tabKind()) end
-    if chip(574, y, 54, 30, 'loop', S.loop, 2) then S.loop = not S.loop end
-    txt(string.format('%.0f BPM', tempo()), 634, y+9, C.mute, 2)
-  end
+  if button(WX+102, ty, 116, 30, 'Insert at cursor') then S.playSong=false; insertAtCursor() end
+  if button(WX+224, ty, 84, 30, 'Save .mid') then exportMidi() end
+  if button(WX+314, ty, 104, 30, 'Set up track') then setupTrack() end
+  if button(WX+424, ty, 116, 30, '+ Add to Song', true) then addToSong(tabKind()) end
 
-  -- selectors
-  y = 316 + bgrow
-  -- spread the control sections into the height the capped board left free, so the rows
-  -- breathe to fill a tall window instead of bunching under the fretboard. spread() returns
-  -- the extra gap to add at each section boundary (0 on a normal, non-tall window); each
-  -- section keeps its own internal layout, so labels stay glued to their chips.
-  local slack = grow - bgrow
-  local function spread(nGaps, natBottom)
-    if slack <= 0 or nGaps <= 0 then return 0 end
-    local room = (dh - 96 - 8) - (y + natBottom)   -- empty space below the last section
-    return math.max(0, math.min(room / nGaps, 80))
-  end
-  if S.tab == 1 then
-    -- key-first: pick the key, then quality, and the diatonic chords fall out of it
-    local sp = spread(5, 380)
-    local kY, qY, inkY, crY, invY, stY =
-      y, y+56+sp, y+136+2*sp, y+210+3*sp, y+256+4*sp, y+306+5*sp
-    txt('KEY', 20, kY, C.mute, 2)
-    for i,r in ipairs(ROOTS) do
-      local x = 20 + (i-1)*46
-      if chip(x, kY+18, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
-    end
-    if chip(578, kY+18, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, kY+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-
-    txt('QUALITY', 20, qY, C.mute, 2)
-    -- common / extended pages keep the picker two rows tall on the fixed canvas while still
-    -- exposing every voiceable quality; the toggle highlights when the extended set is showing.
-    if chip(100, qY-3, 92, 22, '+ extended', S.qualExt, 2) then S.qualExt = not S.qualExt end
+  -- ---- per-source selectors ----
+  local y = ty + 46
+  if S.tab==1 then                                 -- Chord
+    txt('QUALITY', WX, y, C.mute, 2)
+    if chip(WX+80, y-3, 92, 22, '+ extended', S.qualExt, 2) then S.qualExt = not S.qualExt end
     local qset = S.qualExt and QUALS_EXT or QUALS
     for i,q in ipairs(qset) do
-      local x = 20 + ((i-1)%8)*84
-      local yy = qY + 18 + math.floor((i-1)/8)*30
-      if chip(x, yy, 80, 26, q, q==S.qual, 2) then S.qual=q; S.inv=0; audition() end
+      local x = WX + ((i-1)%8)*84
+      local yy = y + 18 + math.floor((i-1)/8)*30
+      if chip(x, yy, 80, 26, q, q==S.qual, 2) then S.qual=q; S.inv=0; audition(false) end
     end
-
-    -- the seven chords of the chosen key, one click each — or play them from the home
-    -- row (a s d f g h j = I..vii°) and sing along; each chip shows its key in the corner.
-    drawInKeyStrip(inkY)
-
-    txt('CHORD ROOT', 20, crY, C.mute, 2)
+    drawInKeyStrip(WX, y+82)
+    txt('CHORD ROOT', WX, y+156, C.mute, 2)
     for i,r in ipairs(ROOTS) do
-      local x = 20 + ((i-1)%12)*56
-      if chip(x, crY+18, 52, 26, r, r==S.root, 2) then S.root=r; S.inv=0; audition() end
+      local x = WX + ((i-1)%12)*56
+      if chip(x, y+174, 52, 26, r, r==S.root, 2) then S.root=r; S.inv=0; audition(false) end
     end
-
-    -- inversions: real hand-playable shapes; the ones with no shape are dimmed out
-    txt('INVERSION', 20, invY, C.mute, 2)
-    local invNames = {'root', '1st', '2nd', '3rd'}
+    txt('INVERSION', WX, y+210, C.mute, 2)
+    local invNames = {'root','1st','2nd','3rd'}
     for iv=0,3 do
-      local x = 20 + iv*88
+      local x = WX + iv*88
       local avail = (iv==0) or (invertShape(S.root, S.qual, iv) ~= nil)
       if avail then
-        if chip(x, invY+18, 84, 26, invNames[iv+1], S.inv==iv, 2) then S.inv=iv; audition() end
+        if chip(x, y+228, 84, 26, invNames[iv+1], S.inv==iv, 2) then S.inv=iv; audition(false) end
       else
-        box(x, invY+18, 84, 26, C.chip, true)
-        box(x, invY+18, 84, 26, C.line, false)
-        txtc(invNames[iv+1], x, invY+25, 84, {0.36,0.37,0.40}, 2)
+        box(x, y+228, 84, 26, C.chip, true); box(x, y+228, 84, 26, C.line, false)
+        txtc(invNames[iv+1], x, y+235, 84, {0.36,0.37,0.40}, 2)
       end
     end
-
-    txt('STRUM', 20, stY, C.mute, 2)
-    for i,s in ipairs(STRUM) do
-      local x = 20 + ((i-1)%5)*136
-      local yy = stY + 18 + math.floor((i-1)/5)*30
-      if iconChip(x, yy, 132, 26, i==S.strumIdx, s.name,
-                  function(ix,iy,iw,ih,on) drawStrumIcon(ix,iy,iw,ih,s,on) end) then
-        S.strumIdx=i; audition()
-      end
+    txt('STRUM', WX, y+266, C.mute, 2)
+    for i,st in ipairs(STRUM) do
+      local x = WX + ((i-1)%5)*136
+      local yy = y+284 + math.floor((i-1)/5)*30
+      if iconChip(x, yy, 132, 26, i==S.strumIdx, st.name,
+                  function(ix,iy,iw,ih,on) drawStrumIcon(ix,iy,iw,ih,st,on) end) then
+        S.strumIdx=i; audition(false) end
     end
-  elseif S.tab == 2 then
-    -- the ROOT selector is gone: the IN KEY strip below is now the root picker (its
-    -- key + degree cover every root), so a separate chromatic ROOT row was redundant.
-    local sp = spread(3, 270)
-    local kY, vY, pY, inkY = y, y+54+sp, y+90+2*sp, y+226+3*sp
-    txt('KEY', 20, kY, C.mute, 2)
+  elseif S.tab==2 then                             -- Power
+    txt('ROOT', WX, y, C.mute, 2)
     for i,r in ipairs(ROOTS) do
-      local x = 20 + (i-1)*46
-      if chip(x, kY+18, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
+      local x = WX + (i-1)*56
+      if chip(x, y+18, 52, 26, r..'5', r==S.proot, 2) then S.proot=r; audition(false) end
     end
-    if chip(578, kY+18, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, kY+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-    if chip(20, vY, 100, 26, S.three and '3-note' or '2-note', S.three, 2) then
-      S.three = not S.three; audition()
+    if chip(WX, y+58, 84, 26, S.three and '3-note' or '2-note', S.three, 2) then S.three = not S.three; audition(false) end
+    drawInKeyStrip(WX, y+94)
+    txt('PATTERN', WX, y+168, C.mute, 2)
+    for i,pp in ipairs(POWER) do
+      local x = WX + ((i-1)%5)*140
+      local yy = y+186 + math.floor((i-1)/5)*34
+      if patternChip(x, yy, 136, 30, i==S.powerIdx, pp.name, pp) then S.powerIdx=i; audition(false) end
     end
-    txt('PATTERN', 20, pY, C.mute, 2)
-    for i,p in ipairs(POWER) do
-      local x = 20 + ((i-1)%5)*136
-      local yy = pY + 18 + math.floor((i-1)/5)*32
-      if patternChip(x, yy, 132, 30, i==S.powerIdx, p.name, p) then S.powerIdx=i; audition() end
-    end
-    -- the home-row strip is the root picker: a s d f g h j set the power-chord root
-    drawInKeyStrip(inkY)
-  elseif S.tab==4 then
-    -- the ROOT (pedal) selector is gone: the IN KEY strip below sets the pedal root by
-    -- scale degree, so a separate chromatic ROOT row was redundant.
-    local sp = spread(4, 320)
-    local scY, rhY, rrY, kY, inkY = y, y+50+sp, y+170+2*sp, y+210+3*sp, y+276+4*sp
-    txt('SCALE', 20, scY, C.mute, 2)
-    for i,s in ipairs(SCALES) do
-      local x = 20 + (i-1)*136
-      if chip(x, scY+18, 132, 26, s.name, s.key==S.scale, 2) then S.scale=s.key; audition() end
-    end
-    txt('RHYTHM', 20, rhY, C.mute, 2)
-    for i,p in ipairs(POWER) do
-      local x = 20 + ((i-1)%5)*136
-      local yy = rhY + 18 + math.floor((i-1)/5)*32
-      if patternChip(x, yy, 132, 30, i==S.rhythmIdx, p.name, p) then S.rhythmIdx=i; audition() end
+  elseif S.tab==4 then                             -- Riff
+    txt('SCALE', WX, y, C.mute, 2)
+    for i,sc in ipairs(SCALES) do
+      local x = WX + (i-1)*140
+      if chip(x, y+18, 136, 26, sc.name, sc.key==S.scale, 2) then S.scale=sc.key; audition(false) end
     end
     do
-      local bx, by, bw, bh = 20, rrY, 150, 30
-      local hov = hit(bx, by, bw, bh)
-      box(bx, by, bw, bh, C.chip, true)
-      box(bx, by, bw, bh, hov and C.mute or C.line, false)
-      drawDice(bx+9, by+7, 16, (S.riffSeed - 1) % 6 + 1)   -- die shows the current roll
-      txt('Re-roll', bx+36, by+(bh-12)/2-1, C.ink, 2)
-      if clicked and hov then S.riffSeed = S.riffSeed + 1; audition() end
+      local bx2 = WX + 3*140 + 12
+      box(bx2, y+16, 150, 30, C.chip, true); box(bx2, y+16, 150, 30, hit(bx2,y+16,150,30) and C.mute or C.line, false)
+      drawDice(bx2+9, y+23, 16, (S.riffSeed - 1) % 6 + 1)
+      txt('Re-roll', bx2+36, y+24, C.ink, 2)
+      if clicked and hit(bx2, y+16, 150, 30) then S.riffSeed = S.riffSeed + 1; audition(false) end
     end
-    txt('a new procedural line in the same scale + rhythm', 176, rrY+9, C.mute, 2)
-    -- the Riff tab has no key of its own, so give it one here: the home-row strip then
-    -- drives the pedal root by scale degree, just like Chords and Power.
-    txt('KEY', 20, kY, C.mute, 2)
-    for i,r in ipairs(ROOTS) do
-      local x = 20 + (i-1)*46
-      if chip(x, kY+18, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r) end
+    drawInKeyStrip(WX, y+58)
+    txt('RHYTHM', WX, y+132, C.mute, 2)
+    for i,pp in ipairs(POWER) do
+      local x = WX + ((i-1)%5)*140
+      local yy = y+150 + math.floor((i-1)/5)*34
+      if patternChip(x, yy, 136, 30, i==S.rhythmIdx, pp.name, pp) then S.rhythmIdx=i; audition(false) end
     end
-    if chip(578, kY+18, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, kY+18, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-    drawInKeyStrip(inkY)
-  elseif S.tab==5 then
-    -- song inspector: the selected block's controls, plus arranging help
-    txt('SONG', 20, y, C.mute, 2)
-    if #S.song==0 then
-      txt('Add blocks from the Chords, Power, Progressions and Riffs tabs', 20, y+22, C.ink, 1)
-      txt('with "+ Add to Song", then drag them here to arrange.', 20, y+46, C.mute, 2)
-    else
-      local b = S.songSel and S.song[S.songSel]
-      if b then
-        txt('Selected: ' .. b.label .. '   (' .. b.kind .. ')', 20, y+22, C.ink, 1)
-        txt('bar ' .. (b.startBar+1) .. '   ·   length', 20, y+54, C.mute, 2)
-        if button(200, y+48, 30, 26, '-') and b.bars > 1 then b.bars = b.bars - 1 end
-        txtc(b.bars .. (b.bars==1 and ' bar' or ' bars'), 234, y+54, 76, C.ink, 2)
-        if button(314, y+48, 30, 26, '+') then b.bars = b.bars + 1 end
-        if button(372, y+48, 96, 26, 'Delete') then deleteSel() end
-      else
-        txt('Click a block to select it.', 20, y+22, C.mute, 2)
-      end
-      txt('Drag a block to move it · drag its right edge to stretch · scroll to pan',
-          20, y+92, C.mute, 2)
-    end
-    -- favorites: save the whole arrangement, or click a name to load it. The project is still
-    -- your real save; this is for reusable block-sets you can drop into any project.
-    txt('FAVORITES', 20, y+118, C.mute, 2)
-    if button(120, y+114, 62, 22, 'Save…') then saveFav() end
-    if S.curFav and button(186, y+114, 62, 22, 'Delete') then delFav() end
-    local fnames = favNames()
-    if #fnames == 0 then
-      txt('none yet — Save keeps this arrangement to reuse anywhere', 258, y+120, C.mute, 2)
-    else
-      for i,nm in ipairs(fnames) do
-        local fx = 20 + ((i-1)%6)*112
-        local fy = y+146 + math.floor((i-1)/6)*28
-        if chip(fx, fy, 108, 24, nm, nm==S.curFav, 2) then loadFav(nm) end
-      end
-    end
-  else
-    -- progressions tab — leads with STYLE and colour-codes by mood, so it reads by
-    -- colour rather than as another chord grid; the library list is the hero.
-    txt('STYLE', 20, y, C.mute, 2)
+  else                                             -- Progression (tab 3)
+    txt('MOOD', WX, y, C.mute, 2)
     for i,m in ipairs(PROGS.moods) do
-      local x = 20 + ((i-1)%7)*98
-      local yy = y + 18 + math.floor((i-1)/7)*30
-      local on, hov = m==S.mood, hit(x, yy, 94, 26)
+      local x = WX + ((i-1)%7)*100
+      local yy = y+18 + math.floor((i-1)/7)*30
+      local on = m==S.mood
+      local hov = hit(x, yy, 94, 26)
       box(x, yy, 94, 26, on and C.accentDim or C.chip, true)
       box(x, yy, 94, 26, on and C.accent or (hov and C.mute or C.line), false)
-      box(x+7, yy+9, 8, 8, moodCol(m), true)                  -- mood swatch
+      box(x+7, yy+9, 8, 8, moodCol(m), true)
       txt(m, x+22, yy+7, on and C.selink or C.ink, 2)
       if clicked and hov then S.mood=m; S.progSel=1; S.progScroll=0; stopAudition() end
     end
-
-    txt('START ON', 20, y+80, C.mute, 2)
-    for i,r in ipairs(ROOTS) do
-      local x = 20 + (i-1)*46
-      if chip(x, y+98, 42, 26, r, pcOf(r)==S.keyPC, 2) then S.keyPC = pcOf(r); audition() end
-    end
-    if chip(578, y+98, 60, 26, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-    if chip(640, y+98, 60, 26, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-
-    -- the scrolling progression list (hero), each row colour-barred by its mood
     local list = progList()
-    local lx, ly, lw = 20, y+138, 680
-    local rowH, rows = 24, 8
-    progListRect = {lx, ly, lw, rowH*rows}    -- captured for wheel scrolling
+    local lx, ly, lw = WX, y+84, W-16-WX
+    local rowH, rows = 24, 7
+    progListRect = {lx, ly, lw, rowH*rows}
     local maxScroll = math.max(0, #list - rows)
     if S.progScroll > maxScroll then S.progScroll = maxScroll end
     box(lx, ly, lw, rowH*rows, C.panel, true)
@@ -1618,61 +1533,39 @@ local function draw(dh)
         local hov = hit(lx, ry, lw, rowH)
         if sel then box(lx, ry, lw, rowH, C.accentDim, true) end
         if hov and not sel then box(lx, ry, lw, rowH, C.chip, true) end
-        box(lx, ry, 4, rowH, moodCol(p.mood), true)           -- mood colour bar
+        box(lx, ry, 4, rowH, moodCol(p.mood), true)
         local names = {}
         for _,c in ipairs(progChords(p)) do names[#names+1] = c.label end
         local text = table.concat(names, ' - ')
-        if p.name ~= '' then text = p.name .. '    ' .. text end
+        if p.name ~= '' then text = p.name..'    '..text end
         txt(text, lx+12, ry+5, sel and C.selink or C.ink, 2)
-        if clicked and hov then S.progSel=idx; audition() end
+        if clicked and hov then S.progSel=idx; audition(false) end
       end
     end
-    -- scrollbar
     if #list > rows then
       local bh = rowH*rows * rows/#list
       local by = ly + (rowH*rows-bh) * (S.progScroll/maxScroll)
       box(lx+lw-5, ly, 5, rowH*rows, C.chip, true)
       box(lx+lw-5, by, 5, bh, C.mute, true)
     end
-    txt((#list) .. ' progressions · scroll to browse · click to audition', 20, ly+rowH*rows+8, C.mute, 2)
-
-    txt('STRUM', 20, ly+rowH*rows+34, C.mute, 2)
-    for i,s in ipairs(STRUM) do
-      local x = 20 + ((i-1)%5)*136
-      local yy = ly+rowH*rows+52 + math.floor((i-1)/5)*30
-      if iconChip(x, yy, 132, 26, i==S.strumIdx, s.name,
-                  function(ix,iy,iw,ih,on) drawStrumIcon(ix,iy,iw,ih,s,on) end) then
-        S.strumIdx=i; audition()
-      end
+    txt(#list..' progressions · scroll to browse · click to audition', WX, ly+rowH*rows+6, C.mute, 2)
+    txt('STRUM', WX, ly+rowH*rows+28, C.mute, 2)
+    for i,st in ipairs(STRUM) do
+      local x = WX + ((i-1)%5)*136
+      local yy = ly+rowH*rows+46 + math.floor((i-1)/5)*30
+      if iconChip(x, yy, 132, 26, i==S.strumIdx, st.name,
+                  function(ix,iy,iw,ih,on) drawStrumIcon(ix,iy,iw,ih,st,on) end) then
+        S.strumIdx=i; audition(false) end
     end
   end
 
-  -- pattern grid (hidden where another row occupies its space: progressions and song)
-  local art = currentArt()
-  if art.p and S.tab ~= 3 and S.tab ~= 5 then
-    local gy = dh - 96
-    local n = #art.p
-    local cw = (680 - (n-1)*3) / n
-    for i=1,n do
-      local x = 20 + (i-1)*(cw+3)
-      local k = art.p[i]
-      local c = (k==0) and C.chip or (k=='P' and C.accentDim or (k=='x' and {0.18,0.19,0.21} or C.accent))
-      box(x, gy, cw, 20, c, true)
-      box(x, gy, cw, 20, (i-1) % art.div == 0 and C.line or C.chip, false)
-      if k ~= 0 and k ~= 'P' then
-        txtc(k=='x' and 'x' or k, x, gy+3, cw, k=='D' and C.selink or C.mute, 2)
-      end
-    end
-  end
-
+  -- status bar
   box(0, dh-52, W, 52, C.panel, true)
-  txt(S.status, 20, dh-36, C.mute, 2)
-  -- version tag, so this window is identifiable at a glance against the browser build
+  txt(S.status, 16, dh-36, C.mute, 2)
   do
     gfx.setfont(2); col(C.mute)
-    local vs = 'v'..VERSION
-    local vw = gfx.measurestr(vs)
-    gfx.x = W - vw - 20; gfx.y = dh-36; gfx.drawstr(vs)
+    local vs = 'v'..VERSION; local vw = gfx.measurestr(vs)
+    gfx.x = W - vw - 16; gfx.y = dh-36; gfx.drawstr(vs)
   end
 end
 
@@ -1690,7 +1583,7 @@ local function loop()
   local s  = math.min(ww / W, wh / H)
   local Hc = math.max(H, math.floor(wh / s + 0.5))
   if Hc ~= drawHc then drawHc = Hc; gfx.setimgdim(CANVAS, W, Hc) end
-  LANE.h = 84 + math.min(Hc - H, BOARD_MAX_EXTRA)   -- the song lane grows, same cap
+  -- LANE geometry is set per-frame in draw() now (docked bottom strip)
   local dw, dh = W * s, Hc * s
   local ox, oy = (ww - dw) / 2, (wh - dh) / 2
   mx = (gfx.mouse_x - ox) / s
@@ -1705,7 +1598,7 @@ local function loop()
     if S.tab==3 and progListRect
        and hit(progListRect[1], progListRect[2], progListRect[3], progListRect[4]) then
       S.progScroll = math.max(0, S.progScroll - dir)
-    elseif S.tab==5 and hit(LANE.x, LANE.y, LANE.w, LANE.h) then
+    elseif hit(LANE.x, LANE.y, LANE.w, LANE.h) then
       local maxScroll = math.max(0, songLen() - 1)
       S.songScroll = math.max(0, math.min(maxScroll, S.songScroll - dir))
     end
