@@ -3,10 +3,10 @@
   @description Browse guitar-voiced chords, audition them through the selected
                track's instrument, and insert them as MIDI at the edit cursor.
   @author generated for REAPER, no extensions required
-  @version 2.12.0+e23bfb2
+  @version 2.12.1+a96c9f2
 --]]
 
-local VERSION = "2.12.0+e23bfb2"
+local VERSION = "2.12.1+a96c9f2"
 
 ----------------------------------------------------------------------
 -- data
@@ -1492,13 +1492,14 @@ end
 
 local function drawHeader()
   txt('Guitar Songwriter', PADX, 14, C.ink, 3)
-  txt('KEY', PADX+236, 20, C.mute, 2)
-  if button(PADX+270, 12, 26, 28, '<') then S.keyPC = (S.keyPC + 11) % 12 end
-  txtc(NAMES[S.keyPC+1], PADX+298, 18, 44, C.ink, 3)
-  if button(PADX+344, 12, 26, 28, '>') then S.keyPC = (S.keyPC + 1) % 12 end
-  if chip(PADX+378, 12, 58, 28, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
-  if chip(PADX+438, 12, 58, 28, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
-  txt(string.format('TEMPO  %.0f BPM', tempo()), PADX+512, 20, C.mute, 2)
+  gfx.setfont(3); local kx = PADX + gfx.measurestr('Guitar Songwriter') + 34   -- KEY sits just past the title
+  txt('KEY', kx, 20, C.mute, 2)
+  if button(kx+32, 12, 26, 28, '<') then S.keyPC = (S.keyPC + 11) % 12 end
+  txtc(NAMES[S.keyPC+1], kx+60, 18, 40, C.ink, 3)
+  if button(kx+102, 12, 26, 28, '>') then S.keyPC = (S.keyPC + 1) % 12 end
+  if chip(kx+136, 12, 56, 28, 'major', S.keyMode=='maj', 2) then S.keyMode='maj' end
+  if chip(kx+194, 12, 56, 28, 'minor', S.keyMode=='min', 2) then S.keyMode='min' end
+  -- tempo is REAPER's project tempo (shown in REAPER's own transport); no duplicate control here
 end
 
 local function draw(dh)
@@ -1536,21 +1537,18 @@ local function draw(dh)
   LANE.x, LANE.y, LANE.w, LANE.h = PADX, laneTop + 34, W - PADX - 16, dh - 60 - (laneTop + 34)
   -- song header + transport
   local sy = laneTop
-  txt('SONG', PADX, sy+4, C.mute, 2)
-  if #S.song == 0 then
-    txt('audition below, press + Add, then drag the blocks here', PADX+56, sy+4, C.mute, 2)
-  else
-    txt(#S.song..' block'..(#S.song==1 and '' or 's')..'  ·  '..songLen()..' bars', PADX+56, sy+4, C.mute, 2)
-  end
+  txt('SONG', PADX, sy+5, C.mute, 2)
+  local info = (#S.song==0) and 'add blocks, then drag to arrange'
+               or (#S.song..' block'..(#S.song==1 and '' or 's')..'  ·  '..songLen()..' bars')
+  txt(info, PADX+56, sy+5, C.mute, 2)
   local tx = W - 16
   local function rbtn(w, label, primary)
     tx = tx - w; local hit_ = button(tx, sy, w, 26, label, primary); tx = tx - 6; return hit_
   end
-  txt(string.format('%.0f BPM', tempo()), tx-70, sy+7, C.mute, 2)   -- rough right anchor below
-  if rbtn(52, 'loop') then S.loop = not S.loop end   -- (loop chip look via button; state shown by status)
-  if rbtn(94, 'Clear') then S.song, S.songSel, S.curFav = {}, nil, nil; stopAudition(); S.status='Song cleared.' end
+  if rbtn(72, S.loop and 'loop: on' or 'loop: off', S.loop) then S.loop = not S.loop end
+  if rbtn(80, 'Clear') then S.song, S.songSel, S.curFav = {}, nil, nil; stopAudition(); S.status='Song cleared.' end
   if rbtn(140, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
-  if rbtn(96, playing and S.playSong and 'Stop' or 'Play song') then
+  if rbtn(104, playing and S.playSong and 'Stop' or 'Play song') then
     if playing and S.playSong then stopAudition() else audition(true) end
   end
   drawTimeline()
@@ -1595,10 +1593,10 @@ local function draw(dh)
     local a = analyze(S.keyPC, S.keyMode, chordPC, S.tab==1 and S.qual or '5')
     txt(a.numeral..'  ·  '..a.func, WX, infoY+84, C.mute, 2)
   end
-  drawBoard(f, bx, 116, W-16-bx, 92 + bgrow)
+  drawBoard(f, bx, 112, W-16-bx, 90)          -- fixed height: never grows into the transport row
 
   -- transport row (source-level audition / insert / setup / add-to-song)
-  local ty = 214 + bgrow
+  local ty = 218
   if button(WX, ty, 96, 30, playing and not S.playSong and 'Stop' or 'Audition', not (playing and not S.playSong)) then
     if playing and not S.playSong then stopAudition() else audition(false) end
   end
