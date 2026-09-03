@@ -236,7 +236,7 @@
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.12.5+804120d</span></div>
+    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.12.6+2b5ceea</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>
@@ -491,41 +491,49 @@ function audio(){
   const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=90;
   const post = ctx.createGain(); post.gain.value=.42;
   driveBus = pre; pre.connect(ws); ws.connect(cab); cab.connect(hp); hp.connect(post); post.connect(master);
-  if(ctx.state==='suspended') ctx.resume();
+  if(ctx.state!=='running') ctx.resume();
+  // recover from iOS audio-session interruptions (screen recording, a call, another app's audio):
+  // Safari drops the context to 'interrupted'/'suspended' — try to resume whenever that happens.
+  ctx.onstatechange = ()=>{ if(ctx.state==='interrupted' || ctx.state==='suspended'){ try{ ctx.resume(); }catch(e){} } };
   return ctx;
 }
 /* iOS also plays Web Audio through a category the mute switch can silence; playing a silent,
    looping <audio> element on a gesture flips the session to "playback" so synth output is heard. */
 let _silentTag;
 function iosUnmute(){
-  if(_silentTag){ try{ _silentTag.play(); }catch(e){} return; }
   try{
-    const sr=8000, n=Math.floor(sr*0.25), buf=new Uint8Array(44+n), dv=new DataView(buf.buffer);
-    const w=(o,s)=>{ for(let i=0;i<s.length;i++) buf[o+i]=s.charCodeAt(i); };
-    w(0,'RIFF'); dv.setUint32(4,36+n,true); w(8,'WAVE'); w(12,'fmt ');
-    dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
-    dv.setUint32(24,sr,true); dv.setUint32(28,sr,true); dv.setUint16(32,1,true); dv.setUint16(34,8,true);
-    w(36,'data'); dv.setUint32(40,n,true); buf.fill(128,44);   // 8-bit silence
-    _silentTag=new Audio(URL.createObjectURL(new Blob([buf],{type:'audio/wav'})));
-    _silentTag.loop=true; _silentTag.setAttribute('playsinline','');
-    _silentTag.play().catch(()=>{});
-  }catch(e){}
+    if(!_silentTag){
+      const sr=8000, n=Math.floor(sr*0.25), buf=new Uint8Array(44+n), dv=new DataView(buf.buffer);
+      const w=(o,s)=>{ for(let i=0;i<s.length;i++) buf[o+i]=s.charCodeAt(i); };
+      w(0,'RIFF'); dv.setUint32(4,36+n,true); w(8,'WAVE'); w(12,'fmt ');
+      dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
+      dv.setUint32(24,sr,true); dv.setUint32(28,sr,true); dv.setUint16(32,1,true); dv.setUint16(34,8,true);
+      w(36,'data'); dv.setUint32(40,n,true); buf.fill(128,44);   // 8-bit silence
+      _silentTag=new Audio(URL.createObjectURL(new Blob([buf],{type:'audio/wav'})));
+      _silentTag.loop=true; _silentTag.setAttribute('playsinline',''); _silentTag.muted=false;
+      try{ _silentTag.style.display='none'; document.body.appendChild(_silentTag); }catch(_){}   // in-DOM plays more reliably on iOS
+    }
+    // re-arm the playback session EVERY gesture; if it won't resume (killed by a screen-record / call
+    // interruption) drop it so the next tap rebuilds a fresh one and the session flips back to playback.
+    _silentTag.play().catch(()=>{ try{ _silentTag.remove(); }catch(_){}; _silentTag=null; });
+  }catch(e){ _silentTag=null; }
 }
 /* iOS/Safari (incl. Vivaldi on iPad) locks Web Audio until a real touch: on the first gesture,
    resume the context, play a one-sample silent buffer, and flip the audio session to playback. */
 function unlockAudio(){
   audio();
-  if(ctx.state==='suspended') ctx.resume();
+  try{ if(ctx.state!=='running') ctx.resume(); }catch(e){}   // 'suspended' AND Safari's 'interrupted'
+  iosUnmute();                                               // re-arm on EVERY gesture, so sound recovers after an interruption (screen recording, a call, another app)
   if(!ctx._unlocked){
     try{ const b=ctx.createBuffer(1,1,ctx.sampleRate), s=ctx.createBufferSource();
          s.buffer=b; s.connect(ctx.destination); s.start(0); }catch(e){}
-    iosUnmute();
     ctx._unlocked=true;
   }
 }
 ['touchend','pointerdown','mousedown','keydown'].forEach(ev=>
   document.addEventListener(ev, unlockAudio, {passive:true}));
-document.addEventListener('visibilitychange', ()=>{ if(ctx && !document.hidden && ctx.state==='suspended') ctx.resume(); });
+// coming back to the tab (after a screen recording, another app, or a lock) — resume and re-arm the session
+document.addEventListener('visibilitychange', ()=>{ if(ctx && !document.hidden){ try{ if(ctx.state!=='running') ctx.resume(); }catch(e){} iosUnmute(); } });
 function buffer(midi, dur, damp, bright){
   const key = midi+'|'+dur.toFixed(2)+'|'+damp+'|'+bright;
   if(cache.has(key)) return cache.get(key);
