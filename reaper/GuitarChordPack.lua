@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.12.4+34afc1b
+  @version 2.12.5+804120d
 --]]
 
-local VERSION = "2.12.4+34afc1b"
+local VERSION = "2.12.5+804120d"
 
 ----------------------------------------------------------------------
 -- data
@@ -1089,6 +1089,9 @@ local function txtc(s,x,y,w,c,font)
 end
 
 local mousePrev, clicked, mx, my = 0, false, 0, 0
+-- OS cursor ids: arrow, horizontal-resize (edges), size-all/move (bodies). Set each frame.
+local CUR_ARROW, CUR_EW, CUR_MOVE = 32512, 32644, 32646
+local hoverCursor = CUR_ARROW
 local pressed, released, held = false, false, false   -- mouse edges/state for dragging
 local songDragMode, songDragOff = nil, 0              -- timeline drag: 'move' | 'stretch'
 local songLoopDrag = nil                              -- loop-region drag: 'l' | 'r' | 'move' | 'new'
@@ -1312,6 +1315,21 @@ local function drawTimeline()
       songLoopDrag = nil
     end
     songDragMode = nil
+  end
+
+  -- cursor feedback: resize over an edge, move over a body (active drag wins so it doesn't flicker)
+  if songLoopDrag=='l' or songLoopDrag=='r' or songDragMode=='stretch' then hoverCursor = CUR_EW
+  elseif songLoopDrag=='move' or songDragMode=='move' then hoverCursor = CUR_MOVE
+  elseif hit(L.x, L.y, L.w, LOOP_H) then
+    local hb, hasR = barAt(mx), (S.loopA and S.loopB and S.loopB > S.loopA)
+    if hasR and (math.abs(hb-S.loopA)<=0.6 or math.abs(hb-S.loopB)<=0.6) then hoverCursor = CUR_EW
+    elseif hasR and hb>S.loopA and hb<S.loopB then hoverCursor = CUR_MOVE end
+  elseif hit(L.x, L.y+LOOP_H, L.w, L.h-LOOP_H-15) then
+    for idx=#S.song,1,-1 do
+      local b=S.song[idx]
+      local bx, bw = L.x + (b.startBar - S.songScroll)*barW, b.bars*barW
+      if mx>=bx and mx<bx+bw then hoverCursor = (mx >= bx+bw-8) and CUR_EW or CUR_MOVE; break end
+    end
   end
 
   -- bar grid + numbers every 4 bars
@@ -1553,6 +1571,7 @@ local function draw(dh)
   local bgrow = math.min(grow, BOARD_MAX_EXTRA)
   gfx.setfont(1)
   col(C.bg); gfx.rect(0,0,W,dh,1)
+  hoverCursor = CUR_ARROW              -- reset each frame; drawTimeline raises it over draggable areas
 
   drawSidebar(dh)
   drawHeader()
@@ -1785,6 +1804,7 @@ local function draw(dh)
     local vs = 'v'..VERSION; local vw = gfx.measurestr(vs)
     gfx.x = W - vw - 16; gfx.y = dh-36; gfx.drawstr(vs)
   end
+  if gfx.setcursor then gfx.setcursor(hoverCursor) end   -- feedback: resize/move cursor over draggable areas
 end
 
 local function loop()
