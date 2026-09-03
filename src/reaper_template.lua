@@ -1459,12 +1459,13 @@ local function draw(dh)
   txt('SONG', PADX, sy+5, C.mute, 2)
   local info = (#S.song==0) and 'add blocks, then drag to arrange'
                or (#S.song..' block'..(#S.song==1 and '' or 's')..'  ·  '..songLen()..' bars')
-  txt(info, PADX+56, sy+5, C.mute, 2)
   local tx = W - 16
   local function rbtn(w, label, primary)
     tx = tx - w; local hit_ = button(tx, sy, w, 26, label, primary); tx = tx - 6; return hit_
   end
+  local hasLoop = S.loopA and S.loopB and S.loopB > S.loopA
   if rbtn(60, S.loop and 'loop: on' or 'loop: off', S.loop) then S.loop = not S.loop end
+  if hasLoop and rbtn(78, 'Clear loop') then S.loopA, S.loopB = nil, nil; S.status='Loop cleared.' end
   if rbtn(58, 'Undo') then songUndoPop() end
   if rbtn(96, 'Clear song') then songSnapshot(); S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; stopAudition(); S.status='Song cleared  ·  Undo to restore.' end
   if rbtn(132, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
@@ -1472,6 +1473,9 @@ local function draw(dh)
   if rbtn(96, playing and S.playSong and 'Stop' or 'Play song') then
     if playing and S.playSong then stopAudition() else audition(true) end
   end
+  -- the hint/summary fills whatever space is left of the leftmost button (dropped when the row is full)
+  gfx.setfont(2)
+  if (tx - 8) - (PADX+56) > gfx.measurestr(info) then txt(info, PADX+56, sy+5, C.mute, 2) end
   drawTimeline()
 
   -- ---- the work area for the active source: PADX-based, between the switch and the lane ----

@@ -236,7 +236,7 @@
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.14.0+8d4e93c</span></div>
+    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.14.1+ef73f0d</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>
@@ -357,6 +357,7 @@
         <span id="ar-count">(0 bars)</span>
         <button class="btn primary" id="ar-play">Play</button>
         <button class="btn toggle" id="ar-loop" aria-pressed="false">Loop</button>
+        <button class="btn" id="ar-loopclear" title="Clear the loop range" hidden>Clear loop</button>
         <button class="btn toggle" id="ar-metro" aria-pressed="false" title="Metronome click while the song plays">Click</button>
         <button class="btn" id="ar-export">Export MIDI</button>
         <button class="btn" id="ar-undo" title="Undo the last arranger change (Z)">Undo</button>
@@ -1253,7 +1254,8 @@ function arRender(){
       +`<span class="ar-ruler-loop-lbl">&#8635; ${fmtPos(AR.loopA)}&ndash;${fmtPos(AR.loopB)}</span>`
       +`<span class="ar-loop-h r" title="Drag to move the loop end"></span>`;
     arRuler.append(strip);   // visual only — the ruler's pointer handler does move/resize/new
-  } else lb.hidden=true;
+    $('ar-loopclear').hidden=false;
+  } else { lb.hidden=true; $('ar-loopclear').hidden=true; }
   // blocks
   [...arLane.querySelectorAll('.ar-block')].forEach(e=>e.remove());
   AR.blocks.forEach((b,idx)=>{
@@ -1349,6 +1351,7 @@ function arToggle(force){
 }
 $('ar-title').onclick=()=>arToggle();
 $('ar-loop').onclick=e=>{ AR.loop=!AR.loop; e.target.setAttribute('aria-pressed',AR.loop); arSave(); };
+$('ar-loopclear').onclick=()=>{ arStopIfPlaying(); AR.loopA=AR.loopB=null; arRender(); arSave(); arMsg('Loop cleared.'); };
 $('ar-metro').onclick=e=>{ AR.metro=!AR.metro; e.target.setAttribute('aria-pressed',AR.metro); arSave(); };
 /* Loop region — ALL interaction lives on the ruler so a finger can't miss a tiny handle:
    press NEAR an edge (generous tolerance) to grow/shrink it, INSIDE to move it, on empty ruler
