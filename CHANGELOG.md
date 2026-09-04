@@ -7,6 +7,11 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.16.8]
+### Fixed
+- **Web: transport buttons no longer grow onto two lines** when the window is narrow — labels like
+  "Export MIDI" / "Clear song" stay one line (which had made the buttons taller and squeezed the lane).
+
 ## [2.16.7]
 ### Added
 - **REAPER: drag the empty song lane to pan the timeline** (a tap still sets the cursor), in addition
