@@ -1408,9 +1408,54 @@ local function drawSidebar(dh)
   txt('real save.', 16, dh-32, {0.36,0.37,0.40}, 2)
 end
 
+----------------------------------------------------------------------
+-- brand mark: the logo's guitar-pick, embedded as a PNG (base64) and blitted
+-- in the header. Decoded to a temp file once, since gfx.loadimg needs a path.
+-- Everything is pcall-guarded — on any failure the header falls back to text.
+----------------------------------------------------------------------
+local LOGO_B64 = [[__LOGO_MARK_B64__]]
+local LOGO_IMG = 200
+local logoOK, logoTried = false, false
+local function b64decode(data)
+  local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  data = data:gsub('[^'..b..'=]', '')
+  return (data:gsub('.', function(x)
+    if x == '=' then return '' end
+    local r, f = '', (b:find(x) - 1)
+    for i = 6, 1, -1 do r = r .. (f % 2^i - f % 2^(i-1) > 0 and '1' or '0') end
+    return r
+  end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+    if #x ~= 8 then return '' end
+    local c = 0
+    for i = 1, 8 do c = c + (x:sub(i,i) == '1' and 2^(8-i) or 0) end
+    return string.char(c)
+  end))
+end
+local function loadLogo()
+  logoTried = true
+  local ok, png = pcall(b64decode, LOGO_B64)
+  if not ok or not png or #png == 0 then return end
+  local path = reaper.GetResourcePath() .. '/gcp_logo_mark.png'
+  local f = io.open(path, 'wb'); if not f then return end
+  f:write(png); f:close()
+  local idx = gfx.loadimg(LOGO_IMG, path)
+  logoOK = (type(idx) == 'number' and idx >= 0)
+end
+
 local function drawHeader()
-  txt('Guitar Songwriter', PADX, 14, C.ink, 3)
-  gfx.setfont(3); local kx = PADX + gfx.measurestr('Guitar Songwriter') + 34   -- KEY sits just past the title
+  local tx0 = PADX
+  if logoOK then                                        -- blit the pick mark, then start the title past it
+    local iw, ih = gfx.getimgdim(LOGO_IMG)
+    if ih and ih > 0 then
+      local scale = 28 / ih
+      gfx.a, gfx.mode = 1, 0
+      gfx.x, gfx.y = PADX, 10
+      gfx.blit(LOGO_IMG, scale, 0)
+      tx0 = PADX + math.floor(iw * scale) + 12
+    end
+  end
+  txt('Guitar Songwriter', tx0, 14, C.ink, 3)
+  gfx.setfont(3); local kx = tx0 + gfx.measurestr('Guitar Songwriter') + 34   -- KEY sits just past the title
   txt('KEY', kx, 20, C.mute, 2)
   if button(kx+32, 12, 26, 28, '<') then S.keyPC = (S.keyPC + 11) % 12 end
   txtc(NAMES[S.keyPC+1], kx+60, 15, 40, C.ink, 3)   -- font 3 is taller; lift it to sit centred with the arrows
@@ -1422,6 +1467,7 @@ end
 
 local function draw(dh)
   dh = dh or H
+  if not logoTried then pcall(loadLogo) end            -- one-time; gfx is live by now
   local grow  = dh - H
   local bgrow = math.min(grow, BOARD_MAX_EXTRA)
   gfx.setfont(1)

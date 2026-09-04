@@ -156,7 +156,7 @@
 
   /* header */
   .brand{font:600 14px/1 system-ui;display:flex;align-items:center;gap:8px;white-space:nowrap}
-  .brand .g{color:var(--amber);font-size:16px}
+  .brand .mark{height:24px;width:auto;display:block}
   .brand .ver{color:var(--mute);font:11px var(--mono);font-weight:400}
   .keybar{display:flex;align-items:center;gap:8px}
   .keybar .lbl{font:600 10px/1 var(--mono);letter-spacing:.16em;color:var(--mute);text-transform:uppercase}
@@ -231,9 +231,7 @@
     padding:30px 30px 22px;box-shadow:0 26px 70px rgba(0,0,0,.62);animation:sppop .34s cubic-bezier(.2,.8,.2,1)}
   @keyframes sppop{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
   @media(prefers-reduced-motion:reduce){.sp-card{animation:none}}
-  .sp-badge{display:inline-flex;align-items:center;gap:8px;font:600 11px var(--mono);letter-spacing:.16em;
-    text-transform:uppercase;color:var(--amber);margin-bottom:15px}
-  .sp-badge .g{font-size:16px}
+  .sp-logo{height:74px;width:auto;max-width:100%;display:block;margin:0 0 18px}
   .sp-card h2{margin:0 0 8px;font:600 27px/1.15 system-ui;letter-spacing:-.015em;text-wrap:balance}
   .sp-tag{color:var(--mute);font-size:13.5px;line-height:1.6;margin:0 0 20px}
   .sp-ways{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
@@ -260,7 +258,7 @@
 
 <div id="splash" hidden>
   <div class="sp-card" role="dialog" aria-modal="true" aria-labelledby="sp-title">
-    <div class="sp-badge"><span class="g">&#9834;</span> Guitar Songwriter</div>
+    <img class="sp-logo" src="__LOGO_SPLASH__" alt="Guitar Songwriter — real chords, real songs">
     <h2 id="sp-title">Chords that sound like a guitar.</h2>
     <p class="sp-tag">Audition real fretboard voicings, browse progressions and metal riffs in any key,
       arrange them on a timeline, and export the result as MIDI. Everything you hear is exactly what the
@@ -298,7 +296,7 @@
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v__VERSION__</span></div>
+    <div class="brand"><img class="mark" src="__LOGO_MARK__" alt=""> Guitar Songwriter <span class="ver">v__VERSION__</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>

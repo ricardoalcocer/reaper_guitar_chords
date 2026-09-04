@@ -8,7 +8,7 @@ Chord data is the single source of truth for voicings and is produced by
 src/gen_chords.py, which validates every voicing against chord theory before
 emitting it. Run `make data` after changing any shape.
 """
-import hashlib, json, os, sys
+import base64, hashlib, json, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'src')
@@ -23,7 +23,17 @@ VERSION_BASE = '2.15.0'
 
 # every source that feeds either deliverable; the hash changes iff one of these does
 _HASH_INPUTS = ['reaper_template.lua', 'web_template.html', 'harmony.lua',
-                'chorddata.json', 'progressions.json']
+                'chorddata.json', 'progressions.json',
+                'assets/logo-splash.png', 'assets/logo-mark.png']
+
+
+def asset_b64(name):
+    """Base64 of a src/assets file (no newlines)."""
+    return base64.b64encode(open(os.path.join(SRC, 'assets', name), 'rb').read()).decode()
+
+
+def asset_data_uri(name):
+    return 'data:image/png;base64,' + asset_b64(name)
 
 
 def build_hash():
@@ -106,6 +116,7 @@ def build_reaper(data, progs):
     lua = lua.replace('--[[HARMONY]]', harmony)
     lua = lua.replace('local CHORDS = --[[CHORD_DATA]]', 'local CHORDS = ' + lua_table(data))
     lua = lua.replace('local PROGS = --[[PROG_DATA]]', 'local PROGS = ' + prog_lua(progs))
+    lua = lua.replace('__LOGO_MARK_B64__', asset_b64('logo-mark.png'))
     lua = lua.replace('__VERSION__', VERSION)
     lua = lua.replace(
         '----------------------------------------------------------------------\n-- ui',
@@ -121,6 +132,8 @@ def build_web(data, progs):
     assert '/*PROG_DATA*/' in html, 'progression data placeholder missing'
     html = html.replace('/*CHORD_DATA*/', json.dumps(data, separators=(',', ':')))
     html = html.replace('/*PROG_DATA*/', json.dumps(progs, separators=(',', ':')))
+    html = html.replace('__LOGO_SPLASH__', asset_data_uri('logo-splash.png'))
+    html = html.replace('__LOGO_MARK__', asset_data_uri('logo-mark.png'))
     html = html.replace('__VERSION__', VERSION)
     out = os.path.join(ROOT, 'web', 'guitar-audition.html')
     open(out, 'w').write(html)

@@ -1,6 +1,9 @@
 <div align="center">
 
-# 🎸 Guitar Songwriter
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.png?v=1">
+  <img src="docs/images/logo.png?v=1" alt="Guitar Songwriter" width="460">
+</picture>
 
 **Chords that sound like a guitar — a browser tool and a REAPER script, built from one source.**
 
@@ -16,7 +19,7 @@ timeline, and export the result as MIDI. Every chord is an actual hand shape, no
 ![voicings](https://img.shields.io/badge/voicings-336-64b5f6)
 ![progressions](https://img.shields.io/badge/progressions-231-64b5f6)
 
-<img src="docs/images/screenshot-chords.png?v=4" alt="Guitar Songwriter — auditioning a C major voicing with its diatonic chords, strum patterns, inversions, and the song arranger docked below" width="880">
+<img src="docs/images/screenshot-chords.png?v=5" alt="Guitar Songwriter — auditioning a C major voicing with its diatonic chords, strum patterns, inversions, and the song arranger docked below" width="880">
 
 </div>
 
@@ -106,7 +109,7 @@ Every chord, six strum patterns, and power chords in thirteen riff patterns — 
 Pick a style, click a progression, and audition or insert it in any key. Metal archetypes voice as power chords automatically.
 
 <div align="center">
-<img src="docs/images/screenshot-progressions.png?v=4" alt="The progression library, filtered by mood, auditioning a progression in the current key" width="880">
+<img src="docs/images/screenshot-progressions.png?v=5" alt="The progression library, filtered by mood, auditioning a progression in the current key" width="880">
 </div>
 
 ## What's in the box
