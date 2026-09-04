@@ -221,7 +221,71 @@
 
   @media(max-width:760px){ #app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) minmax(148px,180px);
     grid-template-areas:"head" "side" "work" "song"} #side{max-height:180px} }
+
+  /* ---- launch splash: what this is, and that it comes as web + REAPER ---- */
+  #splash{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+    padding:20px;background:rgba(9,10,12,.74);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+  #splash[hidden]{display:none}
+  .sp-card{width:min(560px,100%);max-height:calc(100dvh - 40px);overflow-y:auto;
+    background:linear-gradient(180deg,#2F3138,#24262B);border:1px solid var(--line);border-radius:14px;
+    padding:30px 30px 22px;box-shadow:0 26px 70px rgba(0,0,0,.62);animation:sppop .34s cubic-bezier(.2,.8,.2,1)}
+  @keyframes sppop{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){.sp-card{animation:none}}
+  .sp-badge{display:inline-flex;align-items:center;gap:8px;font:600 11px var(--mono);letter-spacing:.16em;
+    text-transform:uppercase;color:var(--amber);margin-bottom:15px}
+  .sp-badge .g{font-size:16px}
+  .sp-card h2{margin:0 0 8px;font:600 27px/1.15 system-ui;letter-spacing:-.015em;text-wrap:balance}
+  .sp-tag{color:var(--mute);font-size:13.5px;line-height:1.6;margin:0 0 20px}
+  .sp-ways{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  @media(max-width:480px){.sp-ways{grid-template-columns:1fr}}
+  .sp-way{background:#24262B;border:1px solid var(--line);border-radius:10px;padding:14px}
+  .sp-way .ic{font-size:20px;line-height:1}
+  .sp-way h3{margin:9px 0 4px;font:600 14px system-ui}
+  .sp-way p{margin:0;color:var(--mute);font-size:12px;line-height:1.5}
+  .sp-way.here{border-color:var(--amber-dim);background:#232C39}
+  .sp-way.here h3::after{content:"you're here";margin-left:7px;font:600 9px var(--mono);letter-spacing:.08em;
+    text-transform:uppercase;color:var(--amber);vertical-align:middle}
+  .sp-note{display:flex;gap:10px;font-size:12.5px;color:var(--mute);line-height:1.55;
+    background:#24262B;border:1px solid var(--line);border-radius:10px;padding:12px 13px;margin-bottom:20px}
+  .sp-note b{color:var(--ink);font-weight:600;font-family:var(--mono)}
+  .sp-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .sp-chk{display:inline-flex;align-items:center;gap:8px;color:var(--mute);font-size:12.5px;cursor:pointer;user-select:none}
+  .sp-chk input{width:15px;height:15px;accent-color:var(--amber);cursor:pointer}
+  .sp-go{background:var(--amber);border:0;color:#fff;font:600 14px system-ui;padding:11px 22px;
+    border-radius:8px;cursor:pointer}
+  .sp-go:hover{filter:brightness(1.08)}
+  .sp-home{margin-top:16px;text-align:center;font:11px var(--mono);letter-spacing:.12em;color:var(--mute)}
+  .sp-home b{color:var(--nickel);font-weight:600}
 </style>
+
+<div id="splash" hidden>
+  <div class="sp-card" role="dialog" aria-modal="true" aria-labelledby="sp-title">
+    <div class="sp-badge"><span class="g">&#9834;</span> Guitar Songwriter</div>
+    <h2 id="sp-title">Chords that sound like a guitar.</h2>
+    <p class="sp-tag">Audition real fretboard voicings, browse progressions and metal riffs in any key,
+      arrange them on a timeline, and export the result as MIDI. Everything you hear is exactly what the
+      MIDI will play &mdash; same voicings, same strokes.</p>
+    <div class="sp-ways">
+      <div class="sp-way here">
+        <div class="ic">&#127760;</div>
+        <h3>In your browser</h3>
+        <p>This page &mdash; nothing to install. A built-in plucked-string synth plays every voicing and strum.</p>
+      </div>
+      <div class="sp-way">
+        <div class="ic">&#127899;</div>
+        <h3>REAPER script</h3>
+        <p>The same tool inside REAPER &mdash; audition through your own guitar VSTi and drop MIDI at the cursor.</p>
+      </div>
+    </div>
+    <div class="sp-note"><span>&#128161;</span><div>Built for people who think on the guitar but work in a DAW.
+      A <b>D</b> is <b>xx0232</b> &mdash; a real hand shape, not a stacked triad &mdash; so it sounds played, not typed.</div></div>
+    <div class="sp-foot">
+      <label class="sp-chk"><input type="checkbox" id="sp-hide"> Don't show this again</label>
+      <button class="sp-go" id="sp-start">Start playing</button>
+    </div>
+    <div class="sp-home"><b>alco.rocks</b> &middot; v2.15.0+dfebe64</div>
+  </div>
+</div>
 
 <div id="app">
   <!-- ============ SIDEBAR: favorites ============ -->
@@ -234,7 +298,7 @@
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.14.3+0fa0871</span></div>
+    <div class="brand"><span class="g">&#9834;</span> Guitar Songwriter <span class="ver">v2.15.0+dfebe64</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>
@@ -1579,5 +1643,22 @@ window.addEventListener('load', arFit);
   var _rf=refreshFavs; refreshFavs=function(){ _rf(); renderFavSide(); };
   $('fav-new').onclick=saveFav;
   refreshFavs(); arRender();
+})();
+</script>
+
+<script>
+/* ---- launch splash: shown every visit unless the viewer opted out (per-browser) ---- */
+(function(){
+  var sp=document.getElementById('splash'); if(!sp) return;
+  var KEY='gcp-splash-hide';
+  var optedOut=false; try{ optedOut = localStorage.getItem(KEY)==='1'; }catch(e){}
+  if(!optedOut) sp.hidden=false;
+  function close(){
+    try{ if(document.getElementById('sp-hide').checked) localStorage.setItem(KEY,'1'); }catch(e){}
+    sp.hidden=true;
+  }
+  document.getElementById('sp-start').onclick=close;
+  sp.addEventListener('click', function(e){ if(e.target===sp) close(); });   // click the backdrop to dismiss
+  document.addEventListener('keydown', function(e){ if(!sp.hidden && e.key==='Escape') close(); });
 })();
 </script>
