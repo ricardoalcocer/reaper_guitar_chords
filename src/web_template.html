@@ -1344,15 +1344,29 @@ function arSetCursor(clientX){
   arRender();
   arMsg(`Cursor at bar ${AR.cursor/BEATS_PER_BAR+1}`);
 }
-let arLaneDown=null;   // set the cursor on a TAP of empty lane (a swipe there scrolls, and must not move it)
+// empty lane: a TAP sets the cursor; a DRAG pans the timeline (like the REAPER lane)
+let arLaneDown=null;
 arLane.addEventListener('pointerdown', e=>{
-  arLaneDown = (e.target===arLane || e.target===$('ar-empty') || e.target===$('ar-cursor'))
-             ? {x:e.clientX, y:e.clientY} : null;
+  if(e.target===arLane || e.target===$('ar-empty') || e.target===$('ar-cursor')){
+    arLaneDown={x:e.clientX, y:e.clientY, sl:arScroll.scrollLeft, moved:false};
+    try{ arLane.setPointerCapture(e.pointerId); }catch(_){}
+  } else arLaneDown=null;
+});
+arLane.addEventListener('pointermove', e=>{
+  if(!arLaneDown) return;
+  const dx=e.clientX-arLaneDown.x;
+  if(arLaneDown.moved || Math.abs(dx)>4){ arLaneDown.moved=true; arScroll.scrollLeft=arLaneDown.sl-dx; }   // drag to pan
 });
 arLane.addEventListener('pointerup', e=>{
-  if(arLaneDown && Math.abs(e.clientX-arLaneDown.x)<6 && Math.abs(e.clientY-arLaneDown.y)<10) arSetCursor(e.clientX);
+  if(arLaneDown && !arLaneDown.moved) arSetCursor(e.clientX);   // a tap (no drag) sets the cursor
   arLaneDown=null;
 });
+// mouse wheel (which is vertical only) scrolls the lane HORIZONTALLY, since the lane scrolls sideways
+arScroll.addEventListener('wheel', e=>{
+  if(arScroll.scrollWidth<=arScroll.clientWidth) return;               // nothing to scroll
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  if(d){ arScroll.scrollLeft += d; e.preventDefault(); }
+}, {passive:false});
 function arAdd(cap){
   arStopIfPlaying(); arSnapshot();
   const at = AR.cursor;                                    // drop at the cursor…

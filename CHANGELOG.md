@@ -7,6 +7,11 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.16.9]
+### Added
+- **Web: the song lane scrolls with the mouse wheel** (the vertical wheel now pans it sideways) and
+  you can **drag the empty lane to pan** it — matching the REAPER lane. A tap still sets the cursor.
+
 ## [2.16.8]
 ### Fixed
 - **Web: transport buttons no longer grow onto two lines** when the window is narrow — labels like
