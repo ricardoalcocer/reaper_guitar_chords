@@ -7,6 +7,11 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.16.5]
+### Changed
+- **REAPER bar numbers moved to the top** of the song lane (a ruler row under the loop strip), like
+  the web, instead of along the bottom.
+
 ## [2.16.4]
 ### Changed
 - **REAPER arranger blocks restyled to match the web** — a dark fill with a coloured border and

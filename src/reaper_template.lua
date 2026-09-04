@@ -1149,6 +1149,8 @@ local function drawTimeline()
   local L, barW = LANE, laneBarW()
   box(L.x, L.y, L.w, L.h, C.panel, true)
   local barAt = function(x) return math.max(0, math.floor((x - L.x)/barW + S.songScroll + 0.5)) end
+  local NUM_H = 13                                   -- bar-number row: under the loop strip, above the blocks (like the web ruler)
+  local blkTop, blkBot = L.y + LOOP_H + NUM_H, L.y + L.h - 3
 
   -- input, resolved before drawing. TOP strip = loop region (edge-aware); below it = blocks.
   if pressed and hit(L.x, L.y, L.w, LOOP_H) then
@@ -1166,9 +1168,9 @@ local function drawTimeline()
       local b  = S.song[idx]
       local bx = L.x + (b.startBar - S.songScroll) * barW
       local bw = b.bars * barW
-      if mx>=bx and mx<bx+bw and my>=L.y+LOOP_H and my<L.y+L.h-15 then
+      if mx>=bx and mx<bx+bw and my>=blkTop and my<blkBot then
         S.songSel = idx
-        if mx >= bx+bw-18 and my < L.y+LOOP_H+18 then          -- the × in the top-right removes just this block
+        if mx >= bx+bw-18 and my < blkTop+18 then          -- the × in the top-right removes just this block
           songSnapshot()
           table.remove(S.song, idx); S.songSel, songDragMode = nil, nil
           S.status = 'Removed a block  ·  '..#S.song..' left  ·  Undo to restore.'
@@ -1205,7 +1207,7 @@ local function drawTimeline()
     local hb, hasR = barAt(mx), (S.loopA and S.loopB and S.loopB > S.loopA)
     if hasR and (math.abs(hb-S.loopA)<=0.6 or math.abs(hb-S.loopB)<=0.6) then hoverCursor = CUR_EW
     elseif hasR and hb>S.loopA and hb<S.loopB then hoverCursor = CUR_MOVE end
-  elseif hit(L.x, L.y+LOOP_H, L.w, L.h-LOOP_H-15) then
+  elseif hit(L.x, blkTop, L.w, blkBot-blkTop) then
     for idx=#S.song,1,-1 do
       local b=S.song[idx]
       local bx, bw = L.x + (b.startBar - S.songScroll)*barW, b.bars*barW
@@ -1218,7 +1220,7 @@ local function drawTimeline()
     local gx, bar = L.x + i*barW, S.songScroll + i
     col(bar % 4 == 0 and C.line or C.chip)
     gline(gx, L.y+LOOP_H, gx, L.y+L.h)
-    if bar % 4 == 0 then txt(tostring(bar+1), gx+3, L.y+L.h-13, C.mute, 2) end
+    if bar % 4 == 0 then txt(tostring(bar+1), gx+3, L.y+LOOP_H+1, C.mute, 2) end   -- numbers on top, under the loop strip
   end
 
   -- loop region: a strip on the ruler + edge lines down the lane, or a hint when unset
@@ -1244,7 +1246,7 @@ local function drawTimeline()
     if vx1 > vx0 then
       local sel = idx == S.songSel
       local k  = KIND[b.kind] or {bg=C.chip, ac=C.accent, ink=C.ink}
-      local by, bh = L.y+LOOP_H+2, L.h-LOOP_H-15
+      local by, bh = blkTop, blkBot-blkTop
       box(vx0, by, vx1-vx0, bh, k.bg, true)                             -- dark fill (like the web block)
       box(vx0, by, vx1-vx0, bh, sel and C.selink or k.ac, false)        -- coloured border, brighter when selected
       txt(b.label, vx0+7, by+6, k.ink, 2)                               -- label, top-left
