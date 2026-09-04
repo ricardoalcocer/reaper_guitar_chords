@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.16.0+37a30f5
+  @version 2.16.1+4ae9650
 --]]
 
-local VERSION = "2.16.0+37a30f5"
+local VERSION = "2.16.1+4ae9650"
 
 ----------------------------------------------------------------------
 -- data
@@ -1110,15 +1110,26 @@ local C = {
   accentDim={0.157,0.278,0.451}, wood={0.216,0.176,0.145}, nickel={0.612,0.639,0.671},
   string={0.776,0.796,0.824}, chip={0.204,0.216,0.239}, selink={0.98,0.99,1.0},
 }
+-- All drawing is authored in a fixed 900-wide "canvas" space. SC/OX/OY map that space onto
+-- the window's real pixels, so we render natively (crisp) each frame instead of drawing into a
+-- 900px bitmap and stretching it (which is what made the UI look blurry on large/HiDPI windows).
+local SC, OX, OY = 1, 0, 0
+local _line, _circle, _rect, _tri = gfx.line, gfx.circle, gfx.rect, gfx.triangle
 local function col(c, a) gfx.set(c[1], c[2], c[3], a or 1) end
-local function box(x,y,w,h,c,fill) col(c); gfx.rect(x,y,w,h,fill and 1 or 0) end
+local function box(x,y,w,h,c,fill) col(c); _rect(OX+x*SC, OY+y*SC, w*SC, h*SC, fill and 1 or 0) end
 local function txt(s,x,y,c,font)
-  gfx.setfont(font or 1); col(c); gfx.x=x; gfx.y=y; gfx.drawstr(s)
+  gfx.setfont(font or 1); col(c); gfx.x=OX+x*SC; gfx.y=OY+y*SC; gfx.drawstr(s)
 end
 local function txtc(s,x,y,w,c,font)
   gfx.setfont(font or 1); col(c)
-  local tw = gfx.measurestr(s); gfx.x = x + (w-tw)/2; gfx.y = y; gfx.drawstr(s)
+  local tw = gfx.measurestr(s); gfx.x = OX + x*SC + (w*SC-tw)/2; gfx.y = OY + y*SC; gfx.drawstr(s)
 end
+-- scaled wrappers for the direct primitives (use the raw aliases, so bulk-renaming is safe)
+local function gline(x1,y1,x2,y2) _line(OX+x1*SC, OY+y1*SC, OX+x2*SC, OY+y2*SC) end
+local function gcirc(x,y,r,fill,aa) _circle(OX+x*SC, OY+y*SC, r*SC, fill, aa) end
+local function grect(x,y,w,h,fill) _rect(OX+x*SC, OY+y*SC, w*SC, h*SC, fill) end
+local function gtri(x1,y1,x2,y2,x3,y3) _tri(OX+x1*SC,OY+y1*SC, OX+x2*SC,OY+y2*SC, OX+x3*SC,OY+y3*SC) end
+local function measure(s) return gfx.measurestr(s)/SC end   -- text width back in canvas units
 
 local mousePrev, clicked, mx, my = 0, false, 0, 0
 -- OS cursor ids: arrow, horizontal-resize (edges), size-all/move (bodies). Set each frame.
@@ -1178,14 +1189,14 @@ end
 ----------------------------------------------------------------------
 local function strokeGlyph(cx, cy, r, kind, on)
   if kind=='D' or kind=='d' then                       -- downstroke: triangle down
-    col(on and C.accent or {0.60,0.64,0.70}); gfx.triangle(cx-r,cy-r, cx+r,cy-r, cx,cy+r)
+    col(on and C.accent or {0.60,0.64,0.70}); gtri(cx-r,cy-r, cx+r,cy-r, cx,cy+r)
   elseif kind=='U' or kind=='u' then                   -- upstroke: triangle up
-    col(C.nickel); gfx.triangle(cx-r,cy+r, cx+r,cy+r, cx,cy-r)
+    col(C.nickel); gtri(cx-r,cy+r, cx+r,cy+r, cx,cy-r)
   elseif kind=='P' then                                -- palm mute: down, muted colour
-    col(C.mute); gfx.triangle(cx-r,cy-r, cx+r,cy-r, cx,cy+r)
+    col(C.mute); gtri(cx-r,cy-r, cx+r,cy-r, cx,cy+r)
   elseif kind=='x' then                                -- dead: small x
-    col(C.mute); gfx.line(cx-r,cy-r,cx+r,cy+r); gfx.line(cx-r,cy+r,cx+r,cy-r)
-  else col(C.line); gfx.circle(cx, cy, 1, 1, 1) end    -- rest: dot
+    col(C.mute); gline(cx-r,cy-r,cx+r,cy+r); gline(cx-r,cy+r,cx+r,cy-r)
+  else col(C.line); gcirc(cx, cy, 1, 1, 1) end    -- rest: dot
 end
 -- strum icon: one big stroke for the single kinds, else the 8-slot down/up motif
 local function drawStrumIcon(x, y, w, h, art, on)
@@ -1193,7 +1204,7 @@ local function drawStrumIcon(x, y, w, h, art, on)
   if art.single then
     if art.single=='A' then                            -- arpeggio: rising steps
       col(on and C.accent or {0.60,0.64,0.70})
-      for i=0,3 do gfx.circle(x+3+i*5, cy+5-i*3, 1.5, 1, 1) end
+      for i=0,3 do gcirc(x+3+i*5, cy+5-i*3, 1.5, 1, 1) end
     else strokeGlyph(x+w/2, cy, 5, art.single, on) end
   else
     local n = #art.p
@@ -1220,7 +1231,7 @@ local function iconChip(x,y,w,h,on,label,drawIcon)
   box(x,y,w,h, on and C.accentDim or C.chip, true)
   box(x,y,w,h, on and C.accent or (hov and C.mute or C.line), false)
   drawIcon(x+4, y+3, 42, h-6, on)
-  col(C.line); gfx.line(x+50, y+4, x+50, y+h-4)
+  col(C.line); gline(x+50, y+4, x+50, y+h-4)
   txt(label, x+56, y+(h-11)/2-1, on and C.selink or C.ink, 2)
   return clicked and hov
 end
@@ -1249,7 +1260,7 @@ local function drawDice(dx, dy, ds, face)
   col(C.bg)
   local r = math.max(1, ds*0.1)
   for _,p in ipairs(PIPS[face] or PIPS[5]) do
-    gfx.circle(dx + p[1]*ds, dy + p[2]*ds, r, 1, 1)
+    gcirc(dx + p[1]*ds, dy + p[2]*ds, r, 1, 1)
   end
 end
 
@@ -1273,24 +1284,24 @@ local function drawBoard(frets, x0, y0, w, h)
   box(nx-7, y0-12, 7, h+24, start==1 and {0.906,0.878,0.824} or {0.353,0.290,0.243}, true)
   for f=1,5 do
     col(C.nickel)
-    gfx.line(nx+fw*f, y0-12, nx+fw*f, y0+h+12)
-    gfx.line(nx+fw*f+1, y0-12, nx+fw*f+1, y0+h+12)
+    gline(nx+fw*f, y0-12, nx+fw*f, y0+h+12)
+    gline(nx+fw*f+1, y0-12, nx+fw*f+1, y0+h+12)
   end
   local now = reaper.time_precise()
   for i=6,1,-1 do
     local y = y0 + (6-i)*sg
     local isLit = (lit[i] or 0) > now
     col(isLit and C.accent or C.string)
-    gfx.line(nx-7, y, nx+fw*5, y)
-    if i <= 3 then gfx.line(nx-7, y+1, nx+fw*5, y+1) end   -- wound strings read thicker
+    gline(nx-7, y, nx+fw*5, y)
+    if i <= 3 then gline(nx-7, y+1, nx+fw*5, y+1) end   -- wound strings read thicker
     local f = frets[i]
     if f == false then
       txtc('x', nx-38, y-8, 16, C.mute, 2)
     elseif f == 0 then
-      col(C.string); gfx.circle(nx-30, y, 5, 0, 1)
+      col(C.string); gcirc(nx-30, y, 5, 0, 1)
     else
       col(isLit and C.accent or {0.949,0.929,0.894})
-      gfx.circle(nx + fw*(f-start+0.5), y, 9, 1, 1)
+      gcirc(nx + fw*(f-start+0.5), y, 9, 1, 1)
     end
   end
   if start > 1 then txtc(start..'fr', nx, y0+h+14, fw, C.mute, 2) end
@@ -1373,7 +1384,7 @@ local function drawTimeline()
   for i=0,L.view do
     local gx, bar = L.x + i*barW, S.songScroll + i
     col(bar % 4 == 0 and C.line or C.chip)
-    gfx.line(gx, L.y+LOOP_H, gx, L.y+L.h)
+    gline(gx, L.y+LOOP_H, gx, L.y+L.h)
     if bar % 4 == 0 then txt(tostring(bar+1), gx+3, L.y+L.h-13, C.mute, 2) end
   end
 
@@ -1384,7 +1395,7 @@ local function drawTimeline()
     local vx0, vx1 = math.max(lx0, L.x), math.min(lx1, L.x+L.w)
     if vx1 > vx0 then
       box(vx0, L.y, vx1-vx0, LOOP_H, C.accentDim, true)
-      col(C.accent); gfx.line(vx0, L.y, vx0, L.y+L.h); gfx.line(vx1-1, L.y, vx1-1, L.y+L.h)
+      col(C.accent); gline(vx0, L.y, vx0, L.y+L.h); gline(vx1-1, L.y, vx1-1, L.y+L.h)
       box(vx0, L.y, 5, LOOP_H, C.accent, true); box(vx1-5, L.y, 5, LOOP_H, C.accent, true)
       txt('loop '..(S.loopA+1)..'-'..S.loopB, vx0+9, L.y+2, C.selink, 2)
     end
@@ -1410,7 +1421,7 @@ local function drawTimeline()
   -- play/insert cursor: a vertical line with a flag at top; + Add drops here and play starts here
   local cx = L.x + (S.cursor - S.songScroll) * barW
   if cx >= L.x-1 and cx <= L.x+L.w+1 then
-    col(C.accent); gfx.line(cx, L.y, cx, L.y+L.h)
+    col(C.accent); gline(cx, L.y, cx, L.y+L.h)
     box(cx-4, L.y, 9, 6, C.accent, true)
   end
 
@@ -1418,7 +1429,7 @@ local function drawTimeline()
   if playing then
     local phx = L.x + (songPlayOff + playingBar()-1 - S.songScroll) * barW
     if phx >= L.x and phx <= L.x+L.w then
-      col(C.accent); gfx.line(phx, L.y, phx, L.y+L.h); gfx.line(phx+1, L.y, phx+1, L.y+L.h)
+      col(C.accent); gline(phx, L.y, phx, L.y+L.h); gline(phx+1, L.y, phx+1, L.y+L.h)
     end
   end
 end
@@ -1427,8 +1438,7 @@ local W, H = 900, 812             -- design canvas: fixed width, fixed *minimum*
 -- The canvas grows taller than H to fill a tall (docked) window instead of letterboxing:
 -- the extra height goes into the fretboard/timeline, everything below it shifts down, and
 -- the footer anchors to the true bottom. Width still governs the scale, so nothing reflows
--- horizontally. drawHc is the current canvas height, recomputed each frame from the window.
-local drawHc = H
+-- horizontally. The canvas height is recomputed each frame from the window (see loop()).
 -- ...but the fretboard only takes a slice of that extra height so it stays a landscape
 -- rectangle instead of ballooning; any slack past this becomes open space above the footer.
 local BOARD_MAX_EXTRA = 70
@@ -1436,10 +1446,9 @@ local BOARD_MAX_EXTRA = 70
 -- the version lives in the status bar instead — otherwise every build looks like a new
 -- window and its remembered position is lost. We set the size (for zoom); REAPER the spot.
 local TITLE  = 'Guitar Songwriter'
-local CANVAS = 0                  -- offscreen image the UI is drawn into, then blitted
 
--- EZdrummer-style zoom: the UI is drawn at the 720x812 canvas and blitted to fill the
--- window, so it scales without reflowing. "100%" is the largest window that fits this
+-- EZdrummer-style zoom: the UI is authored in 900-wide canvas units and rendered natively to
+-- fill the window (SC/OX/OY), so it scales without reflowing. "100%" is the largest window that fits this
 -- monitor's work area (capped for readability); the stepper only scales *down* from
 -- there, so no level is ever bigger than the screen can show.
 local function maxFitScale()
@@ -1460,16 +1469,20 @@ local function levelSize(idx)
   return math.floor(W * m + 0.5), math.floor(H * m + 0.5)
 end
 
+-- fonts are sized in physical pixels (canvas size * SC) so they stay crisp when the window scales
+local fontScale = nil
 local function setFonts()
-  gfx.setfont(1, 'Helvetica Neue', 15)
-  gfx.setfont(2, 'Helvetica Neue', 12)
-  gfx.setfont(3, 'Menlo', 29, string.byte('b'))
-  gfx.setfont(4, 'Menlo', 15)
+  local k = SC
+  local function px(n) return math.max(6, math.floor(n*k + 0.5)) end
+  gfx.setfont(1, 'Helvetica Neue', px(15))
+  gfx.setfont(2, 'Helvetica Neue', px(12))
+  gfx.setfont(3, 'Menlo', px(29), string.byte('b'))
+  gfx.setfont(4, 'Menlo', px(15))
+  fontScale = k
 end
--- fonts and the offscreen buffer are per-window; re-establish them after every init
+-- fonts are per-window; re-establish them after every init (and whenever the scale changes)
 local function afterInit()
   setFonts()
-  gfx.setimgdim(CANVAS, W, H)
 end
 
 ----------------------------------------------------------------------
@@ -1578,7 +1591,7 @@ local SRCSW = {{'Progression',3},{'Chord',1},{'Power',2},{'Riff',4}}
 
 local function drawSidebar(dh)
   box(0, 0, SIDE_W, dh-52, C.panel, true)
-  col(C.line); gfx.line(SIDE_W, 0, SIDE_W, dh-52)
+  col(C.line); gline(SIDE_W, 0, SIDE_W, dh-52)
   txt('FAVORITES', 16, 16, C.mute, 2)
   if button(16, 38, SIDE_W-32, 26, '+ Save song') then saveFav() end
   local names = favNames()
@@ -1637,15 +1650,15 @@ local function drawHeader()
   if logoOK then                                        -- blit the pick mark, then start the title past it
     local iw, ih = gfx.getimgdim(LOGO_IMG)
     if ih and ih > 0 then
-      local scale = 28 / ih
+      local scale = 28 / ih                              -- 28 canvas-px tall
       gfx.a, gfx.mode = 1, 0
-      gfx.x, gfx.y = PADX, 10
-      gfx.blit(LOGO_IMG, scale, 0)
+      gfx.x, gfx.y = OX + PADX*SC, OY + 10*SC
+      gfx.blit(LOGO_IMG, scale*SC, 0)                     -- physical size = canvas size * SC
       tx0 = PADX + math.floor(iw * scale) + 12
     end
   end
   txt('Guitar Songwriter', tx0, 14, C.ink, 3)
-  gfx.setfont(3); local kx = tx0 + gfx.measurestr('Guitar Songwriter') + 34   -- KEY sits just past the title
+  gfx.setfont(3); local kx = tx0 + measure('Guitar Songwriter') + 34   -- KEY sits just past the title
   txt('KEY', kx, 20, C.mute, 2)
   if button(kx+32, 12, 26, 28, '<') then S.keyPC = (S.keyPC + 11) % 12 end
   txtc(NAMES[S.keyPC+1], kx+60, 15, 40, C.ink, 3)   -- font 3 is taller; lift it to sit centred with the arrows
@@ -1661,7 +1674,7 @@ local function draw(dh)
   local grow  = dh - H
   local bgrow = math.min(grow, BOARD_MAX_EXTRA)
   gfx.setfont(1)
-  col(C.bg); gfx.rect(0,0,W,dh,1)
+  col(C.bg); grect(0,0,W,dh,1)
   hoverCursor = CUR_ARROW              -- reset each frame; drawTimeline raises it over draggable areas
 
   drawSidebar(dh)
@@ -1709,7 +1722,7 @@ local function draw(dh)
   end
   -- the hint/summary fills whatever space is left of the leftmost button (dropped when the row is full)
   gfx.setfont(2)
-  if (tx - 8) - (PADX+56) > gfx.measurestr(info) then txt(info, PADX+56, sy+5, C.mute, 2) end
+  if (tx - 8) - (PADX+56) > measure(info) then txt(info, PADX+56, sy+5, C.mute, 2) end
   drawTimeline()
 
   -- ---- the work area for the active source: PADX-based, between the switch and the lane ----
@@ -1725,8 +1738,8 @@ local function draw(dh)
     f = cs[bar].frets
     txt(p.name ~= '' and p.name or (p.mood..' progression'), WX, infoY, C.ink, 3)
     gfx.setfont(4); local lx = WX
-    for j,c in ipairs(cs) do col(j==bar and C.accent or C.mute); gfx.x=lx; gfx.y=infoY+30; gfx.drawstr(c.label)
-      lx = lx + gfx.measurestr(c.label) + gfx.measurestr('  ') end
+    for j,c in ipairs(cs) do col(j==bar and C.accent or C.mute); gfx.x=OX+lx*SC; gfx.y=OY+(infoY+30)*SC; gfx.drawstr(c.label)
+      lx = lx + measure(c.label) + measure('  ') end
     local romans = {}
     for _,c in ipairs(cs) do romans[#romans+1] = analyze(S.keyPC,S.keyMode,pcOf(c.root),c.qual).numeral end
     txt(table.concat(romans,'   '), WX, infoY+60, C.mute, 2)
@@ -1896,8 +1909,8 @@ local function draw(dh)
   txt(S.status, 16, dh-36, C.mute, 2)
   do
     gfx.setfont(2); col(C.mute)
-    local vs = 'v'..VERSION; local vw = gfx.measurestr(vs)
-    gfx.x = W - vw - 16; gfx.y = dh-36; gfx.drawstr(vs)
+    local vs = 'v'..VERSION; local vw = measure(vs)
+    gfx.x = OX + (W - vw - 16)*SC; gfx.y = OY + (dh-36)*SC; gfx.drawstr(vs)
   end
   if gfx.setcursor then gfx.setcursor(hoverCursor) end   -- feedback: resize/move cursor over draggable areas
 end
@@ -1913,14 +1926,14 @@ local function loop()
   end
   -- width governs the scale (never overflow); then grow the canvas *height* to exactly
   -- fill the window at that scale, so a tall docked window has no letterbox bars
-  local s  = math.min(ww / W, wh / H)
-  local Hc = math.max(H, math.floor(wh / s + 0.5))
-  if Hc ~= drawHc then drawHc = Hc; gfx.setimgdim(CANVAS, W, Hc) end
+  SC = math.min(ww / W, wh / H)
+  local Hc = math.max(H, math.floor(wh / SC + 0.5))
+  OX = (ww - W*SC) / 2
+  OY = (wh - Hc*SC) / 2
+  if SC ~= fontScale then setFonts() end          -- re-size the fonts to match the scale
   -- LANE geometry is set per-frame in draw() now (docked bottom strip)
-  local dw, dh = W * s, Hc * s
-  local ox, oy = (ww - dw) / 2, (wh - dh) / 2
-  mx = (gfx.mouse_x - ox) / s
-  my = (gfx.mouse_y - oy) / s
+  mx = (gfx.mouse_x - OX) / SC
+  my = (gfx.mouse_y - OY) / SC
   local down = (gfx.mouse_cap & 1) == 1
   pressed  = down and (mousePrev & 1) == 0
   released = (not down) and (mousePrev & 1) == 1
@@ -1938,11 +1951,9 @@ local function loop()
     gfx.mouse_wheel = 0
   end
 
-  gfx.dest = CANVAS                            -- render the UI to the offscreen canvas
+  gfx.dest = -1                                -- draw straight to the window at native resolution
+  col(C.bg); _rect(0, 0, ww, wh, 1)            -- clear the whole window (also covers any letterbox)
   draw(Hc)
-  gfx.dest = -1                                -- then blit it, scaled, into the window
-  col(C.bg); gfx.rect(0, 0, ww, wh, 1)         -- letterbox fill around the canvas
-  gfx.blit(CANVAS, 1, 0, 0, 0, W, Hc, ox, oy, dw, dh)
 
   mousePrev = gfx.mouse_cap
   serviceAudio()
