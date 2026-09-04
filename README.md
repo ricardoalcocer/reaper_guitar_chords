@@ -12,14 +12,14 @@ timeline, and export the result as MIDI. Every chord is an actual hand shape, no
 `D` is `xx0232`, four notes with the bass strings muted — so it sounds *played*, not typed.
 
 [![license](https://img.shields.io/badge/license-MIT-3b82f6)](https://alco.mit-license.org)
-![version](https://img.shields.io/badge/version-2.15.0-f59e0b)
+![version](https://img.shields.io/badge/version-2.16.6-f59e0b)
 ![browser](https://img.shields.io/badge/browser-standalone_HTML-2a9d8f)
 ![REAPER](https://img.shields.io/badge/REAPER-ReaScript-2a9d8f)
 ![runtime deps](https://img.shields.io/badge/runtime_deps-none-22c55e)
 ![voicings](https://img.shields.io/badge/voicings-336-64b5f6)
 ![progressions](https://img.shields.io/badge/progressions-231-64b5f6)
 
-<img src="docs/images/screenshot-chords.png?v=5" alt="Guitar Songwriter — auditioning a C major voicing with its diatonic chords, strum patterns, inversions, and the song arranger docked below" width="880">
+<img src="docs/images/screenshot-chords.png?v=6" alt="Guitar Songwriter — auditioning a C major voicing with its diatonic chords, strum patterns, inversions, and the song arranger docked below" width="880">
 
 </div>
 
@@ -109,7 +109,7 @@ Every chord, six strum patterns, and power chords in thirteen riff patterns — 
 Pick a style, click a progression, and audition or insert it in any key. Metal archetypes voice as power chords automatically.
 
 <div align="center">
-<img src="docs/images/screenshot-progressions.png?v=5" alt="The progression library, filtered by mood, auditioning a progression in the current key" width="880">
+<img src="docs/images/screenshot-progressions.png?v=6" alt="The progression library, filtered by mood, auditioning a progression in the current key" width="880">
 </div>
 
 ## What's in the box
