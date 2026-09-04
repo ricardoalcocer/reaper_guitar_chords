@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.16.2+e0032f6
+  @version 2.16.3+bf1c709
 --]]
 
-local VERSION = "2.16.2+e0032f6"
+local VERSION = "2.16.3+bf1c709"
 
 ----------------------------------------------------------------------
 -- data
@@ -715,7 +715,9 @@ local function makeBlock(kind)
   else
     local p = currentProg()
     b.g = {prog=p, keyPC=S.keyPC, keyMode=S.keyMode, strumIdx=S.strumIdx}
-    b.bars, b.label = #p.chords, (p.name~='' and p.name or 'progression')
+    local names = {}
+    for _,c in ipairs(progChords(p)) do names[#names+1] = c.label end   -- show the chords, like the web block
+    b.bars, b.label = #p.chords, (p.name~='' and p.name or table.concat(names, ' '))
   end
   return b
 end
@@ -779,9 +781,11 @@ local function songDeserialize(str)
           if d and q and CHORDS['C'][q] then chords[#chords+1] = {tonumber(d), q} end
         end
         if #chords>0 then
-          local name = f[7] or ''
-          b = {kind='prog', startBar=startBar, bars=bars, label=(name~='' and name or 'progression'),
-               g={prog={name=name, chords=chords}, keyPC=tonumber(f[4]) or 0,
+          local name, keyPC = f[7] or '', tonumber(f[4]) or 0
+          local names = {}                             -- resolve the chords in the stored key, like the web block
+          for _,c in ipairs(chords) do names[#names+1] = CHORDS[NAMES[(keyPC + c[1]) % 12 + 1]][c[2]].label end
+          b = {kind='prog', startBar=startBar, bars=bars, label=(name~='' and name or table.concat(names, ' ')),
+               g={prog={name=name, chords=chords}, keyPC=keyPC,
                   keyMode=(f[5]=='min' and 'min' or 'maj'), strumIdx=tonumber(f[6]) or 1}}
         end
       end

@@ -90,7 +90,8 @@
   #ar-title .tri{color:var(--mute);transition:transform .15s;font-size:10px}
   #arranger.open #ar-title .tri{transform:rotate(90deg)}
   #ar-count{color:var(--mute);font:11px var(--mono)}
-  #ar-msg{color:var(--amber);font:11px var(--mono);margin-left:auto;min-height:1em;text-align:right}
+  #ar-msg{color:var(--amber);font:11px var(--mono);margin-left:auto;min-height:1em;text-align:right;
+          min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* never wrap the bar (that stole lane height) */
   #ar-loop[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
   /* timeline: ruler + lane scroll together */
   #ar-scroll{display:none;overflow-x:auto;overflow-y:hidden;margin:0 8px 10px;
@@ -212,7 +213,7 @@
   #arranger{position:static !important;flex:1;min-width:0;box-shadow:none;border-top:0;display:flex;flex-direction:column}
   #ar-resize{display:none !important}
   #ar-title{display:none !important}
-  #ar-bar{flex:0 0 auto}
+  #ar-bar{flex:0 0 auto;flex-wrap:nowrap}   /* one line always, so a status message can't grow it and squeeze the lane */
   .song-title{font:700 11px/1 var(--mono);letter-spacing:.16em;color:var(--mute);text-transform:uppercase}
   #ar-count{color:var(--mute);font:11px var(--mono)}
   #ar-scroll{display:block !important;flex:1;min-height:0}

@@ -7,6 +7,15 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.16.3]
+### Fixed
+- **Web: the arranger no longer shrinks when you click the lane.** Setting the cursor status was
+  wrapping the transport row onto a second line, which stole height from the lane. The row now stays
+  one line (the status truncates instead).
+### Changed
+- **REAPER progression blocks show the chord names** (e.g. `C — Bb — F`), matching the web block,
+  instead of the generic label "progression".
+
 ## [2.16.2]
 ### Changed
 - **Arranger cursor is far easier to place.** Click *anywhere* in the song lane — empty space **or
