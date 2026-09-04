@@ -8,7 +8,7 @@ Audition real fretboard voicings, browse progressions and metal riffs in any key
 timeline, and export the result as MIDI. Every chord is an actual hand shape, not a stacked triad — a
 `D` is `xx0232`, four notes with the bass strings muted — so it sounds *played*, not typed.
 
-[![license](https://img.shields.io/badge/license-MIT-3b82f6)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-3b82f6)](https://alco.mit-license.org)
 ![version](https://img.shields.io/badge/version-2.15.0-f59e0b)
 ![browser](https://img.shields.io/badge/browser-standalone_HTML-2a9d8f)
 ![REAPER](https://img.shields.io/badge/REAPER-ReaScript-2a9d8f)
@@ -146,4 +146,4 @@ engines are diffed shape-for-shape between the two. If they ever drift, the buil
 
 ## License
 
-[MIT](LICENSE) © 2026 Ricardo Alcocer
+[MIT](https://alco.mit-license.org) © 2026 Ricardo Alcocer
