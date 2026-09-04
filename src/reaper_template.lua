@@ -534,9 +534,12 @@ local function currentLabel()
 end
 
 -- ---- block builders (snapshot the active tab's selections into a song block) ----
-local KIND_COL = {   -- lane colour per block kind
-  chord = {0.910,0.639,0.239}, power = {0.42,0.62,0.86},
-  prog  = {0.46,0.78,0.52},    riff  = {0.72,0.55,0.86},
+-- block palette matched to the web arranger: a dark fill, a coloured border+label per source
+local KIND = {
+  chord = {bg={0.129,0.212,0.314}, ac={0.35,0.55,0.82},  ink={0.863,0.910,0.984}},
+  power = {bg={0.220,0.173,0.094}, ac={0.72,0.56,0.28},  ink={0.941,0.851,0.659}},
+  prog  = {bg={0.122,0.200,0.149}, ac={0.44,0.72,0.52},  ink={0.780,0.910,0.812}},
+  riff  = {bg={0.169,0.129,0.251}, ac={0.68,0.55,0.83},  ink={0.855,0.784,0.933}},
 }
 local function tabKind() return ({'chord','power','prog','riff'})[S.tab] end
 local function makeBlock(kind)
@@ -1240,11 +1243,14 @@ local function drawTimeline()
     local vx0, vx1 = math.max(bx, L.x), math.min(bx+bw, L.x+L.w)
     if vx1 > vx0 then
       local sel = idx == S.songSel
-      box(vx0, L.y+LOOP_H+2, vx1-vx0, L.h-LOOP_H-15, KIND_COL[b.kind] or C.accent, true)
-      box(vx0, L.y+LOOP_H+2, vx1-vx0, L.h-LOOP_H-15, sel and C.ink or C.bg, false)
-      txt(b.label, vx0+6, L.y+LOOP_H+6, C.bg, 2)
-      if vx1-vx0 > 26 then txt('x', vx1-13, L.y+LOOP_H+3, C.bg, 2) end          -- per-block remove
-      if sel then box(vx1-6, L.y+LOOP_H+20, 6, L.h-LOOP_H-33, C.ink, true) end  -- stretch handle (below the ×)
+      local k  = KIND[b.kind] or {bg=C.chip, ac=C.accent, ink=C.ink}
+      local by, bh = L.y+LOOP_H+2, L.h-LOOP_H-15
+      box(vx0, by, vx1-vx0, bh, k.bg, true)                             -- dark fill (like the web block)
+      box(vx0, by, vx1-vx0, bh, sel and C.selink or k.ac, false)        -- coloured border, brighter when selected
+      txt(b.label, vx0+7, by+6, k.ink, 2)                               -- label, top-left
+      txt(b.bars..(b.bars==1 and ' bar' or ' bars'), vx0+7, by+bh-15, k.ac, 2)   -- length sub-line, bottom-left
+      if vx1-vx0 > 22 then txt('x', vx1-13, by+3, k.ink, 2) end          -- per-block remove, top-right
+      if sel then box(vx1-6, by+18, 6, bh-31, C.selink, true) end        -- stretch handle (below the ×)
     end
   end
 

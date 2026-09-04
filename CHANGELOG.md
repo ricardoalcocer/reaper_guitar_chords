@@ -7,6 +7,12 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.16.4]
+### Changed
+- **REAPER arranger blocks restyled to match the web** — a dark fill with a coloured border and
+  label per source (chord = blue, power = amber, prog = green, riff = purple, aligned with the web,
+  which had chord/power swapped), plus a length sub-line ("3 bars"). The two lanes now read the same.
+
 ## [2.16.3]
 ### Fixed
 - **Web: the arranger no longer shrinks when you click the lane.** Setting the cursor status was
