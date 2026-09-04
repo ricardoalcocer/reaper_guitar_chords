@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.15.0+a250b6c
+  @version 2.16.0+37a30f5
 --]]
 
-local VERSION = "2.15.0+a250b6c"
+local VERSION = "2.16.0+37a30f5"
 
 ----------------------------------------------------------------------
 -- data
@@ -559,6 +559,7 @@ local S = {
   progScroll = 0,              -- first visible row in that list
   song     = {},               -- the arrangement: an ordered list of blocks
   songSel  = nil,              -- index of the selected block
+  cursor   = 0,                -- play/insert cursor (bar): + Add drops here, play starts here
   songScroll = 0,              -- first visible bar in the timeline lane
   status   = 'Select your guitar track, press Tab to set it up, then Audition (space) — or play a s d f g h j to sing along.',
 }
@@ -701,7 +702,7 @@ local KIND_COL = {   -- lane colour per block kind
 }
 local function tabKind() return ({'chord','power','prog','riff'})[S.tab] end
 local function makeBlock(kind)
-  local b = {kind=kind, startBar=songLen(), g={}}
+  local b = {kind=kind, startBar=S.cursor or songLen(), g={}}   -- drop at the cursor, not always the end
   if kind=='chord' then
     b.g = {root=S.root, qual=S.qual, strumIdx=S.strumIdx}
     b.bars, b.label = 1, CHORDS[S.root][S.qual].label
@@ -722,7 +723,8 @@ local function addToSong(kind)
   local b = makeBlock(kind)
   S.song[#S.song+1] = b
   S.songSel = #S.song
-  S.status = 'Added "'..b.label..'" to the song  ·  '..#S.song..' block'
+  S.cursor = b.startBar + b.bars          -- advance past the new block so adds stack from here
+  S.status = 'Added "'..b.label..'" at bar '..(b.startBar+1)..'  ·  '..#S.song..' block'
              ..(#S.song==1 and '' or 's')..', '..songLen()..' bars.'
 end
 local function deleteSel()
@@ -799,6 +801,7 @@ local function songUndoPop()
   if #songUndo == 0 then S.status = 'Nothing to undo.'; return end
   S.song, S.songSel = songDeserialize(songUndo[#songUndo]), nil
   table.remove(songUndo)
+  S.cursor = songLen()
   S.status = 'Undone  ·  '..#S.song..' block'..(#S.song==1 and '' or 's')..' now.'
 end
 local function currentDia()
@@ -839,6 +842,10 @@ local function queueBar(t0)
     local sub = {}
     for i = S.loopA + 1, math.min(S.loopB, #bars) do sub[#sub+1] = bars[i] end
     if #sub > 0 then bars = sub; songPlayOff = S.loopA end
+  elseif S.playSong and S.cursor and S.cursor > 0 and S.cursor < #bars then
+    local sub = {}                                        -- else start playback at the cursor
+    for i = S.cursor + 1, #bars do sub[#sub+1] = bars[i] end
+    bars = sub; songPlayOff = S.cursor
   end
   for _,evlist in ipairs(bars) do
     playBarStarts[#playBarStarts+1] = t
@@ -1088,6 +1095,7 @@ if _G.GCP_TEST then
             SCALES=SCALES, rootBaseOf=rootBaseOf,
             renderSongBars=renderSongBars, blockNatural=blockNatural, songLen=songLen,
             songSerialize=songSerialize, songDeserialize=songDeserialize,
+            makeBlock=makeBlock, addToSong=addToSong,
             invertShape=invertShape, INV_QUALS=INV_QUALS}
   return
 end
@@ -1324,6 +1332,7 @@ local function drawTimeline()
         break
       end
     end
+    if not S.songSel then S.cursor = barAt(mx); S.status = 'Cursor at bar '..(S.cursor+1) end   -- empty space: move the cursor
   end
   if held and songLoopDrag then
     local cur = barAt(mx)
@@ -1396,6 +1405,13 @@ local function drawTimeline()
       if vx1-vx0 > 26 then txt('x', vx1-13, L.y+LOOP_H+3, C.bg, 2) end          -- per-block remove
       if sel then box(vx1-6, L.y+LOOP_H+20, 6, L.h-LOOP_H-33, C.ink, true) end  -- stretch handle (below the ×)
     end
+  end
+
+  -- play/insert cursor: a vertical line with a flag at top; + Add drops here and play starts here
+  local cx = L.x + (S.cursor - S.songScroll) * barW
+  if cx >= L.x-1 and cx <= L.x+L.w+1 then
+    col(C.accent); gfx.line(cx, L.y, cx, L.y+L.h)
+    box(cx-4, L.y, 9, 6, C.accent, true)
   end
 
   -- playhead (offset by the region's first bar when looping a region)
@@ -1491,7 +1507,7 @@ end
 local function loadFav(name)
   local str = reaper.GetExtState(FAV, 's_'..name)
   if str == '' then S.status = 'That favorite is gone.'; return end
-  S.song, S.songSel, S.curFav = songDeserialize(str), nil, name; S.loopA, S.loopB = nil, nil
+  S.song, S.songSel, S.curFav = songDeserialize(str), nil, name; S.loopA, S.loopB = nil, nil; S.cursor = songLen()
   S.status = 'Loaded "'..name..'"  ·  '..#S.song..' block'..(#S.song==1 and '' or 's')..', '..songLen()..' bars.'
 end
 local function delFav()
@@ -1685,7 +1701,7 @@ local function draw(dh)
   end
   if rbtn(60, S.loop and 'loop: on' or 'loop: off', S.loop) then S.loop = not S.loop end
   if rbtn(58, 'Undo') then songUndoPop() end
-  if rbtn(96, 'Clear song') then songSnapshot(); S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; stopAudition(); S.status='Song cleared  ·  Undo to restore.' end
+  if rbtn(96, 'Clear song') then songSnapshot(); S.song, S.songSel, S.curFav = {}, nil, nil; S.loopA, S.loopB = nil, nil; S.cursor = 0; stopAudition(); S.status='Song cleared  ·  Undo to restore.' end
   if rbtn(132, 'Send to REAPER', true) then S.playSong=true; insertAtCursor() end
   if rbtn(86, 'Export .mid') then exportMidi(true) end
   if rbtn(96, playing and S.playSong and 'Stop' or 'Play song') then

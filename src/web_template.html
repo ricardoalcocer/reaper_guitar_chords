@@ -121,6 +121,11 @@
   #ar-playhead{position:absolute;top:0;bottom:0;width:2px;left:0;background:var(--ink);
                box-shadow:0 0 6px rgba(255,255,255,.5);display:none;pointer-events:none;z-index:6}
   #arranger.playing #ar-playhead{display:block}
+  /* the play/insert cursor: click the lane to move it; play starts here and + Song drops here */
+  #ar-cursor{position:absolute;top:0;bottom:0;width:2px;left:0;margin-left:-1px;background:var(--amber);
+             pointer-events:none;z-index:5}
+  #ar-cursor::before{content:"";position:absolute;top:0;left:-4px;border:5px solid transparent;
+             border-top-color:var(--amber);border-bottom:0}
   .ar-block{position:absolute;top:8px;bottom:8px;border-radius:5px;cursor:grab;user-select:none;
             overflow:hidden;box-sizing:border-box;border:1px solid #3E6DA8;background:var(--amber-dim,#213650);
             touch-action:none}   /* claim touch for drag instead of scrolling the timeline */
@@ -428,8 +433,9 @@
           <div id="ar-loopband" hidden></div>
           <div id="ar-ruler" title="Drag here to set a loop range; click to clear"></div>
           <div id="ar-lane">
+            <div id="ar-cursor"></div>
             <div id="ar-playhead"></div>
-            <div id="ar-empty">Audition a chord, strum, power riff, or progression, then press &ldquo;+ Song&rdquo; to stack it here as a loop.</div>
+            <div id="ar-empty">Audition a chord, strum, power riff, or progression, then click the lane to place the cursor and press &ldquo;+ Song&rdquo; to drop a loop there.</div>
           </div>
         </div>
       </div>
@@ -1255,7 +1261,7 @@ buildRiffScales(); buildRiffPats(); drawRiff();
 
 
 /* ==================== ARRANGER: SONG TRACK (DOM) ==================== */
-const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false, loopA:null, loopB:null, metro:false };
+const AR = { blocks:[], bpm:120, program:25, pxPerBeat:26, h:190, seq:0, open:false, loop:false, loopA:null, loopB:null, metro:false, cursor:0 };
 // arranger undo: snapshot before each edit so a wrong drag/delete/clear is one step back
 let arUndo = [];
 function arSnapshot(){ try{ const s=JSON.stringify(songData());
@@ -1285,7 +1291,7 @@ function arRender(){
   document.documentElement.style.setProperty('--ar-h', AR.h+'px');
   document.documentElement.style.setProperty('--ar-bar', barPx+'px');
   document.documentElement.style.setProperty('--ar-beat', px+'px');
-  const spanBeats = Math.max(end+BEATS_PER_BAR*2, Math.ceil((arScroll.clientWidth||600)/px));
+  const spanBeats = Math.max(end+BEATS_PER_BAR*2, AR.cursor+BEATS_PER_BAR, Math.ceil((arScroll.clientWidth||600)/px));
   $('ar-content').style.width = (spanBeats*px)+'px';
   $('ar-empty').style.display = AR.blocks.length ? 'none' : 'flex';
   // ruler: a numbered line at every bar, a faint tick at every beat
@@ -1323,14 +1329,37 @@ function arRender(){
       +`<span class="ar-grip" title="Drag edge to add/remove beats"></span>`;
     b.el=el; el.dataset.i=idx; arWireBlock(el,b); arLane.append(el);
   });
+  // play/insert cursor — may sit past the last block (drop with a gap), positioned in the lane
+  AR.cursor = Math.max(0, AR.cursor);
+  $('ar-cursor').style.left = (AR.cursor*px) + 'px';
   arFit();
 }
+// click empty lane space to move the cursor (snapped to the bar); clicking a block is its own handler
+function arSetCursor(clientX){
+  const rect = arScroll.getBoundingClientRect();
+  const beat = (clientX - rect.left + arScroll.scrollLeft) / AR.pxPerBeat;
+  AR.cursor = Math.max(0, Math.round(beat/BEATS_PER_BAR)*BEATS_PER_BAR);   // snap to bar
+  arRender();
+  arMsg(`Cursor at bar ${AR.cursor/BEATS_PER_BAR+1}`);
+}
+let arLaneDown=null;   // set the cursor on a TAP of empty lane (a swipe there scrolls, and must not move it)
+arLane.addEventListener('pointerdown', e=>{
+  arLaneDown = (e.target===arLane || e.target===$('ar-empty') || e.target===$('ar-cursor'))
+             ? {x:e.clientX, y:e.clientY} : null;
+});
+arLane.addEventListener('pointerup', e=>{
+  if(arLaneDown && Math.abs(e.clientX-arLaneDown.x)<6 && Math.abs(e.clientY-arLaneDown.y)<10) arSetCursor(e.clientX);
+  arLaneDown=null;
+});
 function arAdd(cap){
   arStopIfPlaying(); arSnapshot();
-  const b = Object.assign({id:++AR.seq, startBeat:arEndBeat()}, cap);
+  const at = AR.cursor;                                    // drop at the cursor…
+  const b = Object.assign({id:++AR.seq, startBeat:at}, cap);
   b.lenBeats = blockLoopBeats(b);                          // its own length
-  AR.blocks.push(b); arRender(); arSave();
-  arMsg(`Added ${blockLabel(b)} — ${fmtLen(b.lenBeats)}`);
+  AR.blocks.push(b);
+  AR.cursor = at + b.lenBeats;                             // …then advance past it, so adds stack
+  arRender(); arSave();
+  arMsg(`Added ${blockLabel(b)} at bar ${at/BEATS_PER_BAR+1} — ${fmtLen(b.lenBeats)}`);
   if(!AR.open) arToggle(true);
 }
 /* capture the current audition of each tab, replayed exactly (no invented rhythm) */
@@ -1448,7 +1477,7 @@ function arPlay(){
   if(!AR.blocks.length){ arMsg('The song is empty — add a loop first.'); return; }
   const spb=60/AR.bpm, songBeats=arEndBeat();
   const region = AR.loopA!=null && AR.loopB>AR.loopA;      // a chosen loop range
-  const A = (AR.loop && region) ? AR.loopA : 0;            // play window [A,B); region only applies when looping
+  const A = (AR.loop && region) ? AR.loopA : Math.min(AR.cursor||0, songBeats);  // else start at the cursor
   const B = (AR.loop && region) ? AR.loopB : songBeats;
   const period = B - A;
   const all=[];
@@ -1459,7 +1488,8 @@ function arPlay(){
   const notes = all.filter(n=> n.startBeat>=A-1e-9 && n.startBeat<B-1e-9).sort((a,b)=>a.startBeat-b.startBeat);
   if(!notes.length){ arMsg(AR.loop&&region?'The loop range is empty.':'Nothing to play.'); return; }
   const cells=AR.blocks.map(b=>b.el), total=notes.length;
-  arMsg(AR.loop ? (region?`Looping bars ${A/BEATS_PER_BAR+1}–${B/BEATS_PER_BAR+1}…`:'Playing (looping)…') : 'Playing…');
+  arMsg(AR.loop ? (region?`Looping bars ${A/BEATS_PER_BAR+1}–${B/BEATS_PER_BAR+1}…`:'Playing (looping)…')
+                : (A>0 ? `Playing from bar ${A/BEATS_PER_BAR+1}…` : 'Playing…'));
   const t0 = (audio(), ctx.currentTime + .12);
   start($('ar-play'), cells, (i,when)=>{
     if(!AR.loop && i>=total){
@@ -1554,6 +1584,7 @@ function applySong(s){
   AR.loopA=(s.loopA!=null && s.loopB>s.loopA)?s.loopA:null; AR.loopB=AR.loopA==null?null:s.loopB;
   AR.blocks=(s.blocks||[]).map(b=>Object.assign({id:++AR.seq}, b))
     .filter(b=>{ try{ blockLoopStrokes(b); return b.lenBeats>=1 && blockLoopBeats(b)>0; }catch(e){ return false; } });
+  AR.cursor=arEndBeat();                                   // a loaded/undone song appends at its end
   $('gtempo').value=AR.bpm; $('gtempov').textContent=AR.bpm;
   $('ar-loop').setAttribute('aria-pressed', AR.loop);
   $('ar-metro').setAttribute('aria-pressed', AR.metro);
