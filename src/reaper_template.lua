@@ -970,6 +970,7 @@ local hoverCursor = CUR_ARROW
 local pressed, released, held = false, false, false   -- mouse edges/state for dragging
 local songDragMode, songDragOff = nil, 0              -- timeline drag: 'move' | 'stretch'
 local songLoopDrag = nil                              -- loop-region drag: 'l' | 'r' | 'move' | 'new'
+local songPanDrag = nil                               -- drag on empty lane to pan the timeline (tap = set cursor)
 local progListRect = nil     -- {x,y,w,h} of the progression list, for wheel scrolling
 local function hit(x,y,w,h) return mx>=x and mx<x+w and my>=y and my<y+h end
 local function chip(x,y,w,h,label,on,font)
@@ -1162,8 +1163,6 @@ local function drawTimeline()
     else   songLoopDrag, S.loopA, S.loopB = 'new', press, press end
   elseif pressed and hit(L.x, L.y+LOOP_H, L.w, L.h-LOOP_H) then
     S.songSel, songDragMode = nil, nil
-    S.cursor = math.max(0, math.floor((mx - L.x)/barW + S.songScroll))   -- a click anywhere in the lane (incl. on a block) moves the cursor to that bar
-    S.status = 'Cursor at bar '..(S.cursor+1)
     for idx=#S.song,1,-1 do                      -- topmost block under the cursor wins
       local b  = S.song[idx]
       local bx = L.x + (b.startBar - S.songScroll) * barW
@@ -1179,6 +1178,7 @@ local function drawTimeline()
         break
       end
     end
+    if not S.songSel then songPanDrag = {x0=mx, scroll0=S.songScroll, moved=false} end   -- empty space: drag to pan, tap sets the cursor
   end
   if held and songLoopDrag then
     local cur = barAt(mx)
@@ -1186,6 +1186,10 @@ local function drawTimeline()
     elseif songLoopDrag=='l'   then S.loopA = math.max(0, math.min(S.loopB-1, cur))
     elseif songLoopDrag=='r'   then S.loopB = math.max(S.loopA+1, cur)
     else   local len = S.loopB - S.loopA; S.loopA = math.max(0, cur - songDragOff); S.loopB = S.loopA + len end
+  elseif held and songPanDrag then                 -- drag the empty lane to pan the timeline
+    if math.abs(mx - songPanDrag.x0) > 3 then songPanDrag.moved = true; hoverCursor = CUR_MOVE end
+    local maxScroll = math.max(0, math.max(songLen(), (S.cursor or 0) + 1) - 1)
+    S.songScroll = math.max(0, math.min(maxScroll, math.floor(songPanDrag.scroll0 + (songPanDrag.x0 - mx)/barW + 0.5)))
   elseif held and S.songSel and songDragMode then
     local b, mbar = S.song[S.songSel], S.songScroll + (mx - L.x)/barW
     if songDragMode=='move' then b.startBar = math.max(0, math.floor(mbar - songDragOff + 0.5))
@@ -1196,6 +1200,13 @@ local function drawTimeline()
       if songLoopDrag=='new' and S.loopA==S.loopB then S.loopA, S.loopB = nil, nil   -- a click clears it
       else S.loop = true end
       songLoopDrag = nil
+    end
+    if songPanDrag then
+      if not songPanDrag.moved then                -- a tap (no drag): move the cursor to that bar
+        S.cursor = math.max(0, math.floor((mx - L.x)/barW + S.songScroll))
+        S.status = 'Cursor at bar '..(S.cursor+1)
+      end
+      songPanDrag = nil
     end
     songDragMode = nil
   end

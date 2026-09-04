@@ -7,6 +7,11 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.16.7]
+### Added
+- **REAPER: drag the empty song lane to pan the timeline** (a tap still sets the cursor), in addition
+  to the wheel/trackpad scroll.
+
 ## [2.16.6]
 ### Fixed
 - **REAPER: the song lane pans with a horizontal trackpad swipe** now (not only the vertical wheel),
