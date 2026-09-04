@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.16.5+ef4d02c
+  @version 2.16.6+748ff9c
 --]]
 
-local VERSION = "2.16.5+ef4d02c"
+local VERSION = "2.16.6+748ff9c"
 
 ----------------------------------------------------------------------
 -- data
@@ -1665,14 +1665,14 @@ local function drawHeader()
     if ih and ih > 0 then
       local scale = 28 / ih                              -- 28 canvas-px tall
       gfx.a, gfx.mode = 1, 0
-      gfx.x, gfx.y = OX + PADX*SC, OY + 10*SC
+      gfx.x, gfx.y = OX + PADX*SC, OY + 12*SC             -- centre the 28px mark in the header band
       gfx.blit(LOGO_IMG, scale*SC, 0)                     -- physical size = canvas size * SC
       tx0 = PADX + math.floor(iw * scale) + 12
     end
   end
   txt('Guitar Songwriter', tx0, 14, C.ink, 3)
   gfx.setfont(3); local kx = tx0 + measure('Guitar Songwriter') + 34   -- KEY sits just past the title
-  txt('KEY', kx, 20, C.mute, 2)
+  txt('KEY', kx, 18, C.mute, 2)                          -- align with the button/chip labels (y=18 in a 28px button)
   if button(kx+32, 12, 26, 28, '<') then S.keyPC = (S.keyPC + 11) % 12 end
   txtc(NAMES[S.keyPC+1], kx+60, 15, 40, C.ink, 3)   -- font 3 is taller; lift it to sit centred with the arrows
   if button(kx+102, 12, 26, 28, '>') then S.keyPC = (S.keyPC + 1) % 12 end
@@ -1698,11 +1698,11 @@ local function draw(dh)
     local px  = W - 16 - 26
     local lx  = px - 46
     local mnx = lx - 26
-    if button(mnx, 12, 26, 24, '-') and uiIdx < #PCTS then
+    if button(mnx, 12, 26, 28, '-') and uiIdx < #PCTS then   -- same 28px height as the KEY buttons
       uiIdx = uiIdx + 1; local w0,h0 = levelSize(uiIdx); pendingSize = {w=w0, h=h0}
     end
     txtc(PCTS[uiIdx]..'%', lx, 18, 46, C.mute, 2)
-    if button(px, 12, 26, 24, '+') and uiIdx > 1 then
+    if button(px, 12, 26, 28, '+') and uiIdx > 1 then
       uiIdx = uiIdx - 1; local w0,h0 = levelSize(uiIdx); pendingSize = {w=w0, h=h0}
     end
   end
@@ -1951,17 +1951,19 @@ local function loop()
   pressed  = down and (mousePrev & 1) == 0
   released = (not down) and (mousePrev & 1) == 1
   held, clicked = down, pressed
-  -- wheel scrolls the progression list or pans the song timeline under the pointer
-  if gfx.mouse_wheel ~= 0 then
-    local dir = gfx.mouse_wheel > 0 and 1 or -1
-    if S.tab==3 and progListRect
+  -- wheel scrolls the progression list; the wheel OR a horizontal trackpad swipe pans the song timeline
+  if gfx.mouse_wheel ~= 0 or gfx.mouse_hwheel ~= 0 then
+    local vdir = gfx.mouse_wheel  > 0 and 1 or (gfx.mouse_wheel  < 0 and -1 or 0)
+    local hdir = gfx.mouse_hwheel > 0 and 1 or (gfx.mouse_hwheel < 0 and -1 or 0)
+    if S.tab==3 and vdir~=0 and progListRect
        and hit(progListRect[1], progListRect[2], progListRect[3], progListRect[4]) then
-      S.progScroll = math.max(0, S.progScroll - dir)
+      S.progScroll = math.max(0, S.progScroll - vdir)
     elseif hit(LANE.x, LANE.y, LANE.w, LANE.h) then
-      local maxScroll = math.max(0, songLen() - 1)
-      S.songScroll = math.max(0, math.min(maxScroll, S.songScroll - dir))
+      local step = (hdir ~= 0) and hdir or -vdir          -- horizontal swipe, else the vertical wheel
+      local maxScroll = math.max(0, math.max(songLen(), (S.cursor or 0) + 1) - 1)   -- reach the end (and the cursor if it's beyond)
+      S.songScroll = math.max(0, math.min(maxScroll, S.songScroll + step))
     end
-    gfx.mouse_wheel = 0
+    gfx.mouse_wheel, gfx.mouse_hwheel = 0, 0
   end
 
   gfx.dest = -1                                -- draw straight to the window at native resolution

@@ -7,6 +7,13 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.16.6]
+### Fixed
+- **REAPER: the song lane pans with a horizontal trackpad swipe** now (not only the vertical wheel),
+  and can scroll a little past the end to place blocks/cursor out there.
+- **REAPER header alignment** — the zoom `−/+` buttons were shorter than the KEY buttons and the KEY
+  label sat a couple pixels low; everything in the header row now lines up.
+
 ## [2.16.5]
 ### Changed
 - **REAPER bar numbers moved to the top** of the song lane (a ruler row under the loop strip), like
