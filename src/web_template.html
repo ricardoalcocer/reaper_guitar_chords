@@ -1338,7 +1338,7 @@ function arRender(){
 function arSetCursor(clientX){
   const rect = arScroll.getBoundingClientRect();
   const beat = (clientX - rect.left + arScroll.scrollLeft) / AR.pxPerBeat;
-  AR.cursor = Math.max(0, Math.round(beat/BEATS_PER_BAR)*BEATS_PER_BAR);   // snap to bar
+  AR.cursor = Math.max(0, Math.floor(beat/BEATS_PER_BAR)*BEATS_PER_BAR);   // the bar you clicked IN
   arRender();
   arMsg(`Cursor at bar ${AR.cursor/BEATS_PER_BAR+1}`);
 }
@@ -1387,24 +1387,29 @@ function arWireBlock(el,b){
     const touch  = e.pointerType==='touch';
     const x0=e.clientX, len0=b.lenBeats, beat0=b.startBeat, sl0=sc.scrollLeft;
     let mode = touch ? null : (onGrip ? 'resize' : 'move');   // touch decides on first move / hold
+    let moved=false, begun=false;
     try{ el.setPointerCapture(e.pointerId); }catch(_){}
-    const begin=()=>{ arStopIfPlaying(); arSnapshot(); if(mode==='move') el.classList.add('drag'); };
-    if(!touch){ e.preventDefault(); begin(); }
+    const begin=()=>{ if(begun) return; begun=true; arStopIfPlaying(); arSnapshot(); if(mode==='move') el.classList.add('drag'); };
+    if(!touch) e.preventDefault();                            // the drag now starts on the first real move…
     const hold = touch ? setTimeout(()=>{ if(mode===null){ mode=onGrip?'resize':'move'; begin(); } }, 220) : null;
     const mv=(ev)=>{
       const dx=ev.clientX-x0;
       if(mode===null){ if(Math.abs(dx)>8){ mode='scroll'; clearTimeout(hold); } else return; }
       if(mode==='scroll'){ sc.scrollLeft = sl0 - dx; return; }   // swipe pans the timeline
       if(ev.cancelable) ev.preventDefault();
+      if(!moved && Math.abs(dx) < 3) return;                  // …so a click with no real movement stays a click
+      moved=true; begin();
       if(mode==='resize'){ b.lenBeats=Math.max(1, len0+Math.round(dx/px()));
         el.style.width=Math.max(20,(b.lenBeats*px()-2))+'px';
         el.querySelector('.ar-sub').textContent=fmtLen(b.lenBeats)+artTag(b)+loopTag(b); }
       else { b.startBeat=Math.max(0, beat0+Math.round(dx/px())); el.style.left=(b.startBeat*px())+'px'; }
     };
-    const up=()=>{ clearTimeout(hold);
+    const up=(ev)=>{ clearTimeout(hold);
       el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up); el.removeEventListener('pointercancel',up);
       el.classList.remove('drag');
-      if(mode==='resize'||mode==='move'){ arReflow(); arRender(); arSave(); } };
+      if(moved){ if(mode==='resize'||mode==='move'){ arReflow(); arRender(); arSave(); } }
+      else if(mode!=='scroll' && !onGrip) arSetCursor((ev&&ev.clientX)||x0);   // a click on the block body places the cursor
+    };
     el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up);
   };
 }

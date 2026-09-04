@@ -130,6 +130,7 @@ See the full [chord chart](docs/chord-chart.md), [strum packs](docs/strum-packs.
 | `src/` | generators, templates, and `chorddata.json` — the single source of truth |
 | `tests/` | voicing, event, harmony, progression and cross-implementation checks |
 | `docs/` | setup guide and the full fret charts |
+| `CHANGELOG.md` | notable changes, newest first |
 
 ## Building from source
 

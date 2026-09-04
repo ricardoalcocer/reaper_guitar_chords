@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.16.1+4ae9650
+  @version 2.16.2+e0032f6
 --]]
 
-local VERSION = "2.16.1+4ae9650"
+local VERSION = "2.16.2+e0032f6"
 
 ----------------------------------------------------------------------
 -- data
@@ -1328,6 +1328,8 @@ local function drawTimeline()
     else   songLoopDrag, S.loopA, S.loopB = 'new', press, press end
   elseif pressed and hit(L.x, L.y+LOOP_H, L.w, L.h-LOOP_H) then
     S.songSel, songDragMode = nil, nil
+    S.cursor = math.max(0, math.floor((mx - L.x)/barW + S.songScroll))   -- a click anywhere in the lane (incl. on a block) moves the cursor to that bar
+    S.status = 'Cursor at bar '..(S.cursor+1)
     for idx=#S.song,1,-1 do                      -- topmost block under the cursor wins
       local b  = S.song[idx]
       local bx = L.x + (b.startBar - S.songScroll) * barW
@@ -1343,7 +1345,6 @@ local function drawTimeline()
         break
       end
     end
-    if not S.songSel then S.cursor = barAt(mx); S.status = 'Cursor at bar '..(S.cursor+1) end   -- empty space: move the cursor
   end
   if held and songLoopDrag then
     local cur = barAt(mx)
