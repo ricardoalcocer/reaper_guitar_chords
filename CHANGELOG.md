@@ -7,6 +7,13 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.16.11]
+### Changed
+- **Riffs are now voiced in position** — the line was mapped entirely onto the low E string, climbing to
+  high frets (hard to read/play). Notes now take the lowest fret across strings, so a riff sits in a low
+  hand position (pedal on a low string, melody on the next strings) — readable on the fretboard and
+  closer to how it's actually played. (Note pitches/MIDI unchanged.)
+
 ## [2.16.10]
 ### Fixed
 - **The fretboard follows a riff as it plays** — it showed only the static pedal root instead of the

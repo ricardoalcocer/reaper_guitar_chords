@@ -325,8 +325,8 @@ end
 
 -- lowest string that can fret this pitch within a hand span; favours low strings
 -- so the line sits in the chunky register a riff wants
-local function fretFor(pitch)
-  for s=1,6 do
+local function fretFor(pitch)              -- highest string that can fret it → LOWEST fret, so a line stays
+  for s=6,1,-1 do                          -- in a low position across strings instead of climbing the low E
     local f = pitch - OPEN[s]
     if f >= 0 and f <= 15 then
       local fr = {false,false,false,false,false,false}
@@ -335,7 +335,7 @@ local function fretFor(pitch)
     end
   end
   local fr = {false,false,false,false,false,false}
-  fr[6] = pitch - OPEN[6]
+  fr[1] = math.max(0, pitch - OPEN[1])
   return fr
 end
 

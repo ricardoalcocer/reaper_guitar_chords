@@ -879,9 +879,10 @@ function makeRiff(root, scaleKey, rhythmIdx, seed){
   RIFF_SCALES.forEach((s,i)=>{ if(s===scale) mixed += (i+1)*7; });
   return {rhythm:riffRhythm(rhythmIdx), scale, steps:generateRiff(scale.iv, riffRhythm(rhythmIdx), riffLcg(mixed))};
 }
-function fretFor(pitch){                                     // lowest string that frets this pitch, favouring low strings
-  for(let s=0;s<6;s++){ const f=pitch-OPEN[s]; if(f>=0 && f<=15){ const fr=[null,null,null,null,null,null]; fr[s]=f; return fr; } }
-  const fr=[null,null,null,null,null,null]; fr[5]=pitch-OPEN[5]; return fr;
+function fretFor(pitch){                                     // highest string that can fret it → LOWEST fret, so a line
+  for(let s=5;s>=0;s--){ const f=pitch-OPEN[s];             // stays in a low position across strings instead of climbing the low E
+    if(f>=0 && f<=15){ const fr=[null,null,null,null,null,null]; fr[s]=f; return fr; } }
+  const fr=[null,null,null,null,null,null]; fr[0]=Math.max(0,pitch-OPEN[0]); return fr;
 }
 function rootBaseOf(root){ const pc=NAMES.indexOf(root); return 40 + (((pc-4)%12)+12)%12; }
 
