@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.16.9+a766023
+  @version 2.16.10+ac94fcc
 --]]
 
-local VERSION = "2.16.9+a766023"
+local VERSION = "2.16.10+ac94fcc"
 
 ----------------------------------------------------------------------
 -- data
@@ -825,6 +825,7 @@ end
 -- audition through the selected track (virtual MIDI keyboard)
 ----------------------------------------------------------------------
 local sched, playing, nextStart, lit = {}, false, 0, {}
+local lastPlayed = nil            -- pitch of the most recent note-on, so the riff board can follow the line
 local playBarStarts = {}          -- audio-clock start time of each bar in the queued sequence
 local songPlayOff = 0             -- first bar of the queued window (nonzero when looping a region)
 
@@ -967,6 +968,7 @@ local function serviceAudio()
     local e = table.remove(sched, 1)
     if e.on then
       reaper.StuffMIDIMessage(0, 0x90, e.pitch, e.vel)
+      lastPlayed = e.pitch
       if e.str then lit[e.str] = now + 0.22 end
     else
       reaper.StuffMIDIMessage(0, 0x80, e.pitch, 0)
@@ -1769,6 +1771,7 @@ local function draw(dh)
     txt(table.concat(romans,'   '), WX, infoY+60, C.mute, 2)
     txt('in '..NAMES[S.keyPC+1]..' '..(S.keyMode=='maj' and 'major' or 'minor')..'  ·  '..#cs..' bars', WX, infoY+80, C.mute, 2)
   elseif S.tab==4 then                             -- Riff
+    if playing and lastPlayed then f = fretFor(lastPlayed) end   -- follow the note actually sounding, not just the root
     txt(currentLabel()..' riff', WX, infoY, C.ink, 3)
     txt(currentDia(), WX, infoY+34, C.accent, 4)
     txt('procedural line · pedal root + scale · Re-roll for a new line', WX, infoY+66, C.mute, 2)

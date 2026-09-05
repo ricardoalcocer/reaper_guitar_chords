@@ -1235,12 +1235,14 @@ function buildRiffPats(){
   });
 }
 function playRiff(force){
-  if(T && !force){ stopAll(); return; }
+  if(T && !force){ stopAll(); drawRiff(); return; }
   const root=riffRoot(), riff=makeRiff(root, rScale, rRhythmIdx, rSeed), pp=riff.rhythm, rb=rootBaseOf(root), lit=lighter('rb');
   const cells=[...$('r-pats').querySelectorAll('.pat[aria-pressed=true] .cell')];
   start($('r-play'), cells, (i,when)=>{ const slot=i%pp.p.length, spb=60/tempo(), dur=spb/pp.div, k=pp.p[slot], st=riff.steps[slot];
-    if(k && st) stroke(fretFor(rb+st.iv), k, when, spb, false, lit);
-    return {slot, dur}; });
+    const fr = (k && st) ? fretFor(rb+st.iv) : null;
+    if(fr) stroke(fr, k, when, spb, false, lit);
+    return {slot, dur, fr};
+  }, step=>{ if(step.fr) $('r-board').innerHTML=board(step.fr,'rb'); });   // follow the line on the fretboard
 }
 $('r-play').onclick=()=>playRiff();
 $('r-reroll').onclick=()=>{ rSeed++; drawRiff(); playRiff(true); };   // always play the new line so you hear the re-roll
@@ -1550,7 +1552,12 @@ function arCurrentFrets(tb){
   for(const b of AR.blocks){
     if(tb>=b.startBeat && tb<b.startBeat+b.lenBeats){
       if(b.source==='power') return powerChord(b.root, b.three);
-      if(b.source==='riff')  return fretFor(rootBaseOf(b.root));
+      if(b.source==='riff'){                                   // show the note actually sounding, not just the root
+        const local=tb-b.startBeat; let cur=null;
+        for(const e of blockNoteEvents(b, AR.bpm)) if(e.startBeat<=local+1e-6 && (!cur || e.startBeat>=cur.startBeat)) cur=e;
+        if(cur){ const fr=[null,null,null,null,null,null]; fr[cur.si]=cur.midi-OPEN[cur.si]; return fr; }
+        return fretFor(rootBaseOf(b.root));
+      }
       if(b.source==='prog'){ const bar=Math.floor((tb-b.startBeat)/BEATS_PER_BAR)%b.chords.length, c=b.chords[bar];
         return CHORDS[c.root][c.quality].frets; }
       return CHORDS[b.root][b.quality].frets;
