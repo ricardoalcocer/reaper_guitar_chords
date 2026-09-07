@@ -36,7 +36,7 @@ perfect sync — same shapes, same strokes, same MIDI. Pick whichever fits how y
 
 | | | |
 |---|---|---|
-| 🌐 **Browser tool** | the full tool, played by a built-in plucked-string synth — nothing to install | one `.html` file · [**alco.rocks**](https://alco.rocks) |
+| 🌐 **Browser tool** | the full tool, played by a built-in plucked-string synth — nothing to install | one `.html` file · [**alco.rocks/guitar-songwriter**](https://alco.rocks/guitar-songwriter) |
 | 🎛️ **REAPER script** | the same tool inside REAPER — audition through your own guitar VSTi and drop MIDI at the cursor | one `.lua` file, no extensions |
 
 It also writes **MIDI packs** — `make packs` renders ~500 `.mid` files (every chord, six strum patterns,
@@ -67,7 +67,7 @@ shows the moment you hear it. This tool encodes the parts that actually matter:
 
 ### 🌐 Browser
 
-Open it at [**alco.rocks**](https://alco.rocks), or run the file locally: [`web/guitar-audition.html`](web/guitar-audition.html).
+Open it at [**alco.rocks/guitar-songwriter**](https://alco.rocks/guitar-songwriter), or run the file locally: [`web/guitar-audition.html`](web/guitar-audition.html).
 Nothing to install — audio starts on your first tap.
 
 > On an iPad or phone, open the hosted page — mobile browsers can't open a local `.html` file directly.
