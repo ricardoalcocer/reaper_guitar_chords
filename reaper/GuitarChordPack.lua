@@ -4,10 +4,10 @@
                procedural riffs through the selected track's instrument, arrange
                them on the song lane, and insert the result as MIDI at the cursor.
   @author generated for REAPER, no extensions required
-  @version 2.16.11+d38a0ad
+  @version 2.17.0+83b46cd
 --]]
 
-local VERSION = "2.16.11+d38a0ad"
+local VERSION = "2.17.0+83b46cd"
 
 ----------------------------------------------------------------------
 -- data

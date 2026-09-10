@@ -7,6 +7,18 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.17.0]
+### Added
+- **Web: a phone-friendly layout.** Below 860px the page becomes one column: favorites move into a
+  slide-in drawer (the **★ Songs** button in the header), the song lane folds down to just its
+  transport bar (tap **Song**) so the work area gets the screen, and on a phone held sideways it
+  starts folded. Below 640px the header and song bar each go to two rows with short labels, and the
+  source tabs span the width. On touch screens every chip, button, and list row is at least 40px
+  tall and the keyboard-only hints (`a s d f g h j`) disappear.
+### Fixed
+- **Web: the page no longer overflows a phone screen** — the one-line song bar was silently forcing
+  the whole layout to ~616px wide, clipping the key picker and every panel's right edge.
+
 ## [2.16.11]
 ### Changed
 - **Riffs are now voiced in position** — the line was mapped entirely onto the low E string, climbing to

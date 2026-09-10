@@ -212,7 +212,7 @@
   /* arranger docked in the grid instead of position:fixed */
   #arranger{position:static !important;flex:1;min-width:0;box-shadow:none;border-top:0;display:flex;flex-direction:column}
   #ar-resize{display:none !important}
-  #ar-title{display:none !important}
+  #ar-title{display:none}
   #ar-bar{flex:0 0 auto;flex-wrap:nowrap;overflow:hidden}   /* one line always; clip (not grow) if the window is too narrow, trimming the status first */
   #ar-bar .btn{flex:0 0 auto}               /* buttons keep their size (label stays on one line); #ar-msg absorbs the squeeze */
   .song-title{font:700 11px/1 var(--mono);letter-spacing:.16em;color:var(--mute);text-transform:uppercase}
@@ -226,8 +226,79 @@
   #fav-toast.show{display:flex}
   #fav-toast #fav-undo{background:none;border:0;color:var(--amber);font-weight:700;cursor:pointer}
 
-  @media(max-width:760px){ #app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) minmax(148px,180px);
-    grid-template-areas:"head" "side" "work" "song"} #side{max-height:180px} }
+  /* ============ phones + tablets in portrait ============
+     A grid item's automatic min-width is its CONTENT width: the one-line song bar (~616px) was
+     silently forcing the whole column wider than a phone, clipping the key picker and panels.
+     ≤860px: one column; favorites become a slide-in drawer (★ Songs in the header); the song
+     lane folds down to just its bar (tap "Song") so the work area gets the screen back.
+     ≤640px: header and song bar each go to two rows, short labels, tabs span the width.
+     Coarse pointer: every tap target ≥ 40px and keyboard-only hints disappear. */
+  #app>*{min-width:0}
+  .favbtn,.side-x,#side-scrim,.sm{display:none}
+  #ar-acts{display:contents}
+  @media(pointer:coarse){
+    .chip{padding:10px 12px;font-size:13px;min-height:40px}
+    .dchip{min-width:64px;padding:8px 10px}
+    .pat{padding:10px 8px}  .cell{height:28px}
+    .btn{padding:11px 16px}
+    .seg .tab{padding:11px 14px}
+    .keypick button{padding:8px 11px}  .modepick button{padding:8px 12px}
+    #pg-list>div{padding:11px 12px !important}
+    .fav .favacts button{padding:9px}
+    .kbd-hint{display:none}
+    input[type=range]{height:28px}
+  }
+  @media(max-width:860px){
+    #app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) minmax(140px,160px);grid-template-areas:"head" "work" "song"}
+    body.song-min #app{grid-template-rows:auto minmax(0,1fr) auto}
+    body.song-min #ar-scroll{display:none !important}
+    #ar-title{display:flex}  .song-title{display:none}
+    #ar-title .tri{transform:rotate(90deg)}  body.song-min #ar-title .tri{transform:none}
+    /* favorites drawer */
+    #side{position:fixed;top:0;bottom:0;left:0;width:min(320px,86vw);z-index:56;box-shadow:0 0 40px rgba(0,0,0,.6);
+          transform:translateX(-102%);transition:transform .22s ease;
+          padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+    body.side-open #side{transform:none}
+    #side-scrim{position:fixed;inset:0;z-index:55;background:rgba(0,0,0,.55)}
+    body.side-open #side-scrim{display:block}
+    .side-x{display:block;background:none;border:0;color:var(--mute);font:24px/1 system-ui;padding:2px 8px;cursor:pointer;margin-left:auto}
+    .favbtn{display:inline-flex;align-items:center;gap:6px;background:#2A2D33;border:1px solid var(--line);color:var(--ink);
+            border-radius:8px;padding:8px 12px;font:600 12px system-ui;cursor:pointer;white-space:nowrap}
+    .favbtn b{color:var(--amber)}
+    /* header: brand + Songs on top, key + tempo below */
+    #head{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand fav" "key tempo";
+          gap:8px 10px;padding:max(env(safe-area-inset-top),10px) 12px 10px;align-items:center}
+    .brand{grid-area:brand;min-width:0;overflow:hidden}  .brand .ver{display:none}
+    .favbtn{grid-area:fav;justify-self:end}
+    .keybar{grid-area:key}  .keybar .lbl{display:none}
+    .tempo{grid-area:tempo;justify-self:end}
+    .spacer{display:none}
+    .ws-pad{padding:10px 12px 20px}
+    .panel{padding:12px}
+    .name{font-size:26px}
+    #fav-toast{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom))}
+    #ar-bar{padding:6px 10px}
+  }
+  @media(max-width:640px){
+    .seg{display:flex;width:100%}  .seg .tab{flex:1;padding:10px 4px;text-align:center}
+    .sm{display:inline}  .lg{display:none}
+    .tempo .tl{display:none}  .tempo input[type=range]{width:84px}
+    .modepick button{padding:8px 10px}
+    /* song bar: title + status on one row, the actions (short labels) on the next; the lane row
+       grows a little to pay for the second bar row */
+    #app{grid-template-rows:auto minmax(0,1fr) minmax(165px,180px)}
+    #ar-bar{flex-wrap:wrap;gap:6px 8px;padding:6px 10px 8px}
+    #ar-acts{display:flex;order:2;flex-basis:100%;gap:5px;overflow-x:auto;scrollbar-width:none}
+    #ar-acts::-webkit-scrollbar{display:none}
+    #ar-acts .btn{padding:8px 9px;font-size:12px}
+    #ar-msg{order:1;flex:1 1 0;font-size:10px}
+    #ar-empty{font-size:11px;line-height:1.4}
+    .sp-card{padding:22px 18px 18px}  .sp-card h2{font-size:22px}
+  }
+  @media(max-width:860px) and (max-height:520px){   /* phone in landscape: one header row */
+    #head{grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"brand key tempo fav";
+          padding-top:max(env(safe-area-inset-top),6px);padding-bottom:6px}
+  }
 
   /* ---- launch splash: what this is, and that it comes as web + REAPER ---- */
   #splash{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
@@ -295,22 +366,25 @@
 <div id="app">
   <!-- ============ SIDEBAR: favorites ============ -->
   <aside id="side">
-    <div class="side-h"><span class="t">Favorites</span><span class="cnt" id="favcnt"></span></div>
+    <div class="side-h"><span class="t">Favorites</span><span class="cnt" id="favcnt"></span>
+      <button class="side-x" id="side-close" aria-label="Close favorites">&times;</button></div>
     <button class="newbtn" id="fav-new" title="Save the current song to this browser">&#43; Save current song</button>
     <div class="favlist" id="favlist"></div>
     <div class="side-foot">Saved in this browser &middot; Export MIDI to keep a copy</div>
   </aside>
+  <div id="side-scrim"></div>
 
   <!-- ============ HEADER: global key + tempo ============ -->
   <header id="head">
-    <div class="brand"><img class="mark" src="__LOGO_MARK__" alt=""> Guitar Songwriter <span class="ver">v__VERSION__</span></div>
+    <div class="brand"><img class="mark" src="__LOGO_MARK__" alt=""><span class="bt">Guitar Songwriter</span> <span class="ver">v__VERSION__</span></div>
     <div class="keybar">
       <span class="lbl">Key</span>
       <div class="keypick"><button id="gk-prev" title="Down a semitone">&#9664;</button><span class="k" id="gk-name">C</span><button id="gk-next" title="Up a semitone">&#9654;</button></div>
-      <div class="modepick"><button id="gk-maj" aria-pressed="true">Major</button><button id="gk-min" aria-pressed="false">Minor</button></div>
+      <div class="modepick"><button id="gk-maj" aria-pressed="true">Maj<span class="lg">or</span></button><button id="gk-min" aria-pressed="false">Min<span class="lg">or</span></button></div>
     </div>
     <div class="spacer"></div>
-    <label class="tempo">Tempo <input type="range" id="gtempo" min="60" max="200" value="120"> <b id="gtempov">120</b></label>
+    <label class="tempo"><span class="tl">Tempo</span> <input type="range" id="gtempo" min="60" max="200" value="120"> <b id="gtempov">120</b></label>
+    <button class="favbtn" id="fav-open" aria-controls="side" aria-expanded="false" title="Saved songs"><b>&#9733;</b> Songs</button>
   </header>
 
   <!-- ============ WORKSPACE: source switch + panels ============ -->
@@ -340,7 +414,7 @@
           <div id="s-pats"></div>
         </div>
         <div class="panel">
-          <p class="eyebrow">Chords in your key &mdash; play with keys <b style="color:var(--ink)">a s d f g h j</b></p>
+          <p class="eyebrow">Chords in your key<span class="kbd-hint"> &mdash; play with keys <b style="color:var(--ink)">a s d f g h j</b></span></p>
           <div class="chips" id="c-diatonic"></div>
           <p class="eyebrow" style="margin-top:14px">Any root</p><div class="chips" id="s-roots"></div>
           <p class="eyebrow" style="margin-top:14px">Any quality</p><div class="chips" id="s-quals"></div>
@@ -422,12 +496,14 @@
         <button id="ar-title" aria-expanded="false"><span class="tri">&#9654;</span> Song</button>
         <span class="song-title">Song</span>
         <span id="ar-count">(0 bars)</span>
-        <button class="btn primary" id="ar-play">Play</button>
-        <button class="btn toggle" id="ar-loop" aria-pressed="false">Loop</button>
-        <button class="btn toggle" id="ar-metro" aria-pressed="false" title="Metronome click while the song plays">Click</button>
-        <button class="btn" id="ar-export">Export MIDI</button>
-        <button class="btn" id="ar-undo" title="Undo the last arranger change (Z)">Undo</button>
-        <button class="btn" id="ar-clear" title="Remove ALL blocks — use the × on a block to remove just one">Clear song</button>
+        <div id="ar-acts">
+          <button class="btn primary" id="ar-play">Play</button>
+          <button class="btn toggle" id="ar-loop" aria-pressed="false">Loop</button>
+          <button class="btn toggle" id="ar-metro" aria-pressed="false" title="Metronome click while the song plays">Click</button>
+          <button class="btn" id="ar-export"><span class="lg">Export MIDI</span><span class="sm">Export</span></button>
+          <button class="btn" id="ar-undo" title="Undo the last arranger change (Z)">Undo</button>
+          <button class="btn" id="ar-clear" title="Remove ALL blocks — use the × on a block to remove just one"><span class="lg">Clear song</span><span class="sm">Clear</span></button>
+        </div>
         <span id="ar-msg" role="status" aria-live="polite"></span>
       </div>
       <div id="ar-scroll">
@@ -437,7 +513,7 @@
           <div id="ar-lane">
             <div id="ar-cursor"></div>
             <div id="ar-playhead"></div>
-            <div id="ar-empty">Audition a chord, strum, power riff, or progression, then click the lane to place the cursor and press &ldquo;+ Song&rdquo; to drop a loop there.</div>
+            <div id="ar-empty"><span class="lg">Audition a chord, strum, power riff, or progression, then click the lane to place the cursor and press &ldquo;+ Song&rdquo; to drop a loop there.</span><span class="sm">Audition something above, then tap &ldquo;+ Song&rdquo; to drop it here.</span></div>
           </div>
         </div>
       </div>
@@ -1701,6 +1777,18 @@ window.addEventListener('load', arFit);
   var _rf=refreshFavs; refreshFavs=function(){ _rf(); renderFavSide(); };
   $('fav-new').onclick=saveFav;
   refreshFavs(); arRender();
+
+  /* ---- mobile shell: favorites drawer + foldable song lane (CSS ≤860px does the rest) ---- */
+  function sideOpen(o){ document.body.classList.toggle('side-open',o); $('fav-open').setAttribute('aria-expanded',o); }
+  $('fav-open').onclick=function(){ sideOpen(!document.body.classList.contains('side-open')); };
+  $('side-close').onclick=function(){ sideOpen(false); };
+  $('side-scrim').onclick=function(){ sideOpen(false); };
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') sideOpen(false); });
+  var _lf=loadFav; loadFav=function(n){ _lf(n); sideOpen(false); };   // picking a song is the end of the errand
+  // "Song" folds the lane: arToggle already tracks AR.open; mirror it on <body> so the grid can drop the row
+  var _at=arToggle; arToggle=function(f){ _at(f); document.body.classList.toggle('song-min',!AR.open); };
+  // a phone held sideways has no room for both: start with the lane folded (Play still on the bar)
+  if(matchMedia('(max-width:860px) and (max-height:520px)').matches) arToggle(false);
 })();
 </script>
 
