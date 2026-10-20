@@ -1,4 +1,4 @@
-.PHONY: all data test packs clean
+.PHONY: all data test packs dist clean
 
 all:
 	@python3 src/build.py
@@ -24,12 +24,16 @@ test: all
 	@node tests/test_arranger.js
 	@lua5.4 tests/dump_riffs.lua >/dev/null && node tests/test_riffs_web.js
 	@lua5.4 tests/dump_inversions.lua >/dev/null && node tests/test_inversions_web.js
+	@python3 tests/test_dist.py
 
 packs:
 	@python3 src/gen_chords.py
 	@python3 src/gen_strum.py
 	@python3 src/gen_power.py
 	@echo "MIDI packs written to packs/"
+
+dist: all
+	@python3 src/dist.py
 
 clean:
 	@rm -rf build packs

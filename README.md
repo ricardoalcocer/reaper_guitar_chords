@@ -37,7 +37,7 @@ perfect sync — same shapes, same strokes, same MIDI. Pick whichever fits how y
 | | | |
 |---|---|---|
 | 🌐 **Browser tool** | the full tool, played by a built-in plucked-string synth — nothing to install | one `.html` file · [**alco.rocks/guitar-songwriter**](https://alco.rocks/guitar-songwriter) |
-| 🎛️ **REAPER script** | the same tool inside REAPER — audition through your own guitar VSTi and drop MIDI at the cursor | one `.lua` file, no extensions |
+| 🎛️ **REAPER script** | the same tool inside REAPER — audition through your own guitar VSTi and drop MIDI at the cursor | one `.lua` file, no extensions · [**download zip**](https://github.com/ricardoalcocer/reaper_guitar_chords/releases/latest/download/GuitarSongwriter.zip) |
 
 It also writes **MIDI packs** — `make packs` renders ~500 `.mid` files (every chord, six strum patterns,
 power chords in thirteen riff patterns) to drag straight into any DAW.
@@ -76,7 +76,9 @@ Nothing to install — audio starts on your first tap.
 
 ### 🎛️ REAPER
 
-1. **Actions → Show action list → New action → Load ReaScript…** and choose [`reaper/GuitarChordPack.lua`](reaper/GuitarChordPack.lua).
+1. [**Download GuitarSongwriter.zip**](https://github.com/ricardoalcocer/reaper_guitar_chords/releases/latest/download/GuitarSongwriter.zip) and unzip it
+   (or grab [`reaper/GuitarChordPack.lua`](reaper/GuitarChordPack.lua) straight from the repo). Then
+   **Actions → Show action list → New action → Load ReaScript…** and choose `GuitarChordPack.lua`.
 2. Select a track that has your guitar VSTi on it.
 3. Press **`Tab`** (or click **Set up track**) to arm it, enable input monitoring, and set MIDI input.
 4. Press **`space`** to audition, tweak root / quality / strum, then **Send to REAPER** to commit the MIDI.
@@ -136,6 +138,7 @@ See the full [chord chart](docs/chord-chart.md), [strum packs](docs/strum-packs.
 
 ```sh
 make          # build both targets from src/
+make dist     # package them as build/dist/GuitarSongwriter.zip
 make data     # regenerate + revalidate chord data, then build
 make test     # full suite (harmony, 62k events, analysis, progressions, JS parity)
 make packs    # generate the MIDI packs

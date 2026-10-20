@@ -1,0 +1,22 @@
+# Push a tag like v2.17.1 and this attaches build/dist/GuitarSongwriter.zip to a
+# GitHub Release. The asset name never changes, so the website can link to
+# .../releases/latest/download/GuitarSongwriter.zip forever.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 src/dist.py
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: build/dist/GuitarSongwriter.zip
+          generate_release_notes: true

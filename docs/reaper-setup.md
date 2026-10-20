@@ -4,6 +4,8 @@ Native ReaScript. No ReaPack, no ReaImGui, no SWS required.
 
 ## Install
 
+1. [Download GuitarSongwriter.zip](https://github.com/ricardoalcocer/reaper_guitar_chords/releases/latest/download/GuitarSongwriter.zip)
+   and unzip it.
 1. In REAPER: **Actions → Show action list → New action → Load ReaScript**, pick
    `GuitarChordPack.lua`. (Or drop it in `REAPER/Scripts/` first and load from there.)
 2. Select it in the action list and hit **Run**. Assign a shortcut or toolbar button

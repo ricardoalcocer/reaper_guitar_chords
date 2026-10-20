@@ -7,6 +7,14 @@ version, so a matching stamp means they came from the same build.
 The format follows [Keep a Changelog](https://keepachangelog.com); versions are the `VERSION_BASE`
 in `src/build.py` (the build appends a short source hash, e.g. `2.16.2+e0032f6`).
 
+## [2.17.1]
+### Added
+- **A download zip.** `make dist` packages the REAPER script, the browser tool, the license and a
+  plain-text install guide into `build/dist/GuitarSongwriter.zip`. Pushing a `v*` tag publishes it
+  to GitHub Releases, so the latest is always at
+  `https://github.com/ricardoalcocer/reaper_guitar_chords/releases/latest/download/GuitarSongwriter.zip`.
+  No change to the tool itself.
+
 ## [2.17.0]
 ### Added
 - **Web: a phone-friendly layout.** Below 860px the page becomes one column: favorites move into a
