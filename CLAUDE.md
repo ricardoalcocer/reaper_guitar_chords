@@ -117,5 +117,6 @@ feature, add its test in the same commit.
 `2.1.0+414abd3`) changes automatically whenever any source does — two builds can never
 look identical even if you forget to bump the base. The same string is stamped into both
 deliverables and shown in each window/title, so matching stamps confirm the REAPER script
-and the browser tool came from one build. Bump `VERSION_BASE` in the same commit as the
+and the browser tool came from one build. The build also rewrites the README version,
+voicings and progressions badges, so never edit those by hand. Bump `VERSION_BASE` in the same commit as the
 change it describes.

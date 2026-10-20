@@ -12,7 +12,7 @@ timeline, and export the result as MIDI. Every chord is an actual hand shape, no
 `D` is `xx0232`, four notes with the bass strings muted — so it sounds *played*, not typed.
 
 [![license](https://img.shields.io/badge/license-MIT-3b82f6)](https://alco.mit-license.org)
-![version](https://img.shields.io/badge/version-2.16.6-f59e0b)
+![version](https://img.shields.io/badge/version-2.17.1-f59e0b)
 ![browser](https://img.shields.io/badge/browser-standalone_HTML-2a9d8f)
 ![REAPER](https://img.shields.io/badge/REAPER-ReaScript-2a9d8f)
 ![runtime deps](https://img.shields.io/badge/runtime_deps-none-22c55e)

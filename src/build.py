@@ -8,7 +8,7 @@ Chord data is the single source of truth for voicings and is produced by
 src/gen_chords.py, which validates every voicing against chord theory before
 emitting it. Run `make data` after changing any shape.
 """
-import base64, hashlib, json, os, sys
+import base64, hashlib, json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'src')
@@ -141,6 +141,22 @@ def build_web(data, progs):
     return out, len(html)
 
 
+def stamp_readme(n_voicings, n_progs):
+    """Rewrites the README badges from the build, so they can't go stale.
+
+    Uses VERSION_BASE, not VERSION: shields.io reads '-' and '+' in the path as
+    separators, and readers care about the release, not the source hash."""
+    path = os.path.join(ROOT, 'README.md')
+    md = open(path).read()
+    for label, value, color in (('version', VERSION_BASE, 'f59e0b'),
+                                ('voicings', n_voicings, '64b5f6'),
+                                ('progressions', n_progs, '64b5f6')):
+        md, hits = re.subn(rf'badge/{label}-[^-]+-[0-9a-f]{{6}}',
+                           f'badge/{label}-{value}-{color}', md)
+        assert hits == 1, f'README {label} badge not found'
+    open(path, 'w').write(md)
+
+
 if __name__ == '__main__':
     data = chord_data()
     progs = prog_data()
@@ -148,3 +164,4 @@ if __name__ == '__main__':
     for path, size in (build_reaper(data, progs), build_web(data, progs)):
         print(f'{os.path.relpath(path, ROOT):34} {size/1024:6.1f} KB')
     print(f'{n} chord voicings embedded, {len(progs["progressions"])} progressions')
+    stamp_readme(n, len(progs['progressions']))

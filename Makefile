@@ -25,6 +25,7 @@ test: all
 	@lua5.4 tests/dump_riffs.lua >/dev/null && node tests/test_riffs_web.js
 	@lua5.4 tests/dump_inversions.lua >/dev/null && node tests/test_inversions_web.js
 	@python3 tests/test_dist.py
+	@python3 tests/test_readme.py
 
 packs:
 	@python3 src/gen_chords.py
