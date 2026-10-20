@@ -1,11 +1,14 @@
-# Push a tag like v2.17.1 and this attaches build/dist/GuitarSongwriter.zip to a
-# GitHub Release. The asset name never changes, so the website can link to
+# Attaches build/dist/GuitarSongwriter.zip to a GitHub Release. Either push a tag
+# like v2.17.1, or run this workflow by hand (Actions tab, works from a phone): it
+# then tags the current main as v<VERSION_BASE> itself. The asset name never
+# changes, so the website can link to
 # .../releases/latest/download/GuitarSongwriter.zip forever.
 name: release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,8 +18,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=v$(sed -n "s/^VERSION_BASE = '\(.*\)'/\1/p" src/build.py)" >> "$GITHUB_OUTPUT"
+          fi
       - run: python3 src/dist.py
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          target_commitish: ${{ github.sha }}
           files: build/dist/GuitarSongwriter.zip
           generate_release_notes: true
